@@ -100,8 +100,6 @@
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
 
         /* Custom Scrollbar */
         ::-webkit-scrollbar {
@@ -1775,20 +1773,6 @@
                     }
                 },
                 
-                sendPoll() {
-                    this.pushMessage({
-                        type: 'poll',
-                        poll: {
-                            question: this.pollData.question,
-                            options: [...this.pollData.options],
-                            votes: new Array(this.pollData.options.length).fill(0),
-                            votedBy: []
-                        }
-                    });
-                    this.showPollModal = false;
-                    this.pollData = { question: '', options: ['', ''] };
-                },
-                
                 publishFlashInfo() {
                     if(!this.flashInfoText.trim()) return;
                     if (this.socket) {
@@ -1997,14 +1981,14 @@
                         });
                         
                         if (response.ok) {
-                            showNotification('Rôle utilisateur mis à jour avec succès', 'success');
-                            await fetchAdminUsers();
+                            this.showNotification('Rôle utilisateur mis à jour avec succès', 'success');
+                            await this.fetchAdminUsers();
                         } else {
-                            showNotification('Erreur lors de la mise à jour du rôle', 'error');
+                            this.showNotification('Erreur lors de la mise à jour du rôle', 'error');
                         }
                     } catch (error) {
                         console.error('Error updating user role:', error);
-                        showNotification('Erreur lors de la mise à jour du rôle', 'error');
+                        this.showNotification('Erreur lors de la mise à jour du rôle', 'error');
                     }
                 },
 
@@ -2067,21 +2051,21 @@
                                 if (response.ok) {
                                     const roomData = await response.json();
                                     this.currentRoom = roomData;
-                                    showNotification(`Rejoint la salle: ${roomData.name}`, 'success');
+                                    this.showNotification(`Rejoint la salle: ${roomData.name}`, 'success');
                                     
                                     // Load messages for this room
                                     await this.loadMessages();
                                 } else {
-                                    showNotification('Erreur lors de la jonction de la salle', 'error');
+                                    this.showNotification('Erreur lors de la jonction de la salle', 'error');
                                 }
                             } catch (error) {
                                 console.error('Error joining room:', error);
-                                showNotification('Erreur lors de la jonction de la salle', 'error');
+                                this.showNotification('Erreur lors de la jonction de la salle', 'error');
                             }
                         }, 300);
                     } catch (error) {
                         console.error('Error switching to chat:', error);
-                        showNotification('Erreur lors de la navigation vers le chat', 'error');
+                        this.showNotification('Erreur lors de la navigation vers le chat', 'error');
                     }
                 },
 
