@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstname String
+  lastname  String
+  role      String   @default("STUDENT") // STUDENT, MODERATOR, ADMIN
+  className String?
+  avatar    String?
+  createdAt DateTime @default(now())
+
+  roomsCreated   Room[]
+  roomMembers    RoomMember[]
+  messages       Message[]
+  reactions      Reaction[]
+  threads        ForumThread[]
+  posts          ForumPost[]
+  notifications  Notification[]
+}
+
+model Room {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  members     RoomMember[]
+  messages    Message[]
+}
+
+model RoomMember {
+  id       String   @id @default(uuid())
+  userId   String
+  roomId   String
+  joinedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String?
+  type      String   @default("TEXT") // TEXT, FILE, POLL, SNIPPET
+  userId    String
+  roomId    String
+  parentId  String?
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  parent    Message? @relation("MessageReplies", fields: [parentId], references: [id])
+  replies   Message[] @relation("MessageReplies")
+
+  reactions Reaction[]
+  file      File?
+  poll      Poll?
+  snippet   Snippet?
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model File {
+  id           String   @id @default(uuid())
+  messageId    String   @unique
+  originalName String
+  storedName   String
+  size         Int
+  mimetype     String
+
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model Poll {
+  id        String   @id @default(uuid())
+  messageId String   @unique
+  question  String
+  options   String   // JSON string of string[]
+  votes     String   // JSON string of {optionIndex, userId}[]
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model Snippet {
+  id        String   @id @default(uuid())
+  messageId String   @unique
+  language  String
+  code      String
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model ForumCategory {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  order       Int      @default(0)
+
+  threads     ForumThread[]
+}
+
+model ForumThread {
+  id         String   @id @default(uuid())
+  title      String
+  content    String
+  userId     String
+  categoryId String
+  pinned     Boolean  @default(false)
+  solved     Boolean  @default(false)
+  viewCount  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  posts      ForumPost[]
+}
+
+model ForumPost {
+  id           String   @id @default(uuid())
+  content      String
+  userId       String
+  threadId     String
+  parentPostId String?
+  likesCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread       ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parent       ForumPost?  @relation("PostReplies", fields: [parentPostId], references: [id])
+  replies      ForumPost[] @relation("PostReplies")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
