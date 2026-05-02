@@ -793,7 +793,7 @@
                 </div>
 
                 <!-- Admin Quick Actions -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mandarine/20 relative overflow-hidden group">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
@@ -817,6 +817,18 @@
                             <input type="text" x-model="flashInfoText" placeholder="Votre message..." class="flex-1 bg-white/50 dark:bg-slate-900 border-none rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-mint dark:text-white">
                             <button @click="publishFlashInfo()" class="px-4 py-2.5 bg-brand-mint text-brand-dark text-xs font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity">Envoyer</button>
                         </div>
+                    </div>
+
+                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-jaune/20 relative overflow-hidden group">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                <i data-lucide="shield-alert" class="w-5 h-5 text-brand-jaune"></i> Règles RGPD
+                            </h3>
+                        </div>
+                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Modifiez les règles de confidentialité affichées aux étudiants.</p>
+                        <button @click="showRulesModal = true" class="w-full py-3 bg-brand-jaune/80 text-brand-dark text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i> Éditer les règles
+                        </button>
                     </div>
                 </div>
 
@@ -929,14 +941,18 @@
         <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showRulesModal = false"></div>
         <div class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-2xl rounded-3xl shadow-2xl relative z-10 flex flex-col border border-white/50 dark:border-white/10" x-show="showRulesModal" x-transition>
             <div class="px-6 py-4 border-b border-gray-200/50 dark:border-slate-700/50 flex items-center justify-between">
-                <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2"><i data-lucide="shield-alert" class="w-5 h-5 text-brand-mandarine"></i> Règles RGPD</h3>
+                <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-brand-mandarine"></i> Règles RGPD &amp; Confidentialité
+                </h3>
                 <button @click="showRulesModal = false" class="p-2 text-gray-400 hover:text-brand-dark dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="p-6">
-                <textarea class="w-full h-48 p-5 rounded-2xl border border-gray-200 dark:border-slate-600 focus:ring-2 focus:ring-brand-mandarine resize-none text-sm bg-white dark:bg-slate-900 dark:text-white shadow-inner">RÈGLES DE CONFIDENTIALITÉ...</textarea>
+                <p class="text-xs text-gray-400 mb-3">Modifiez le texte ci-dessous. Il sera affiché aux étudiants lors de leur inscription.</p>
+                <textarea x-model="rulesText" rows="10" class="w-full p-5 rounded-2xl border border-gray-200 dark:border-slate-600 focus:ring-2 focus:ring-brand-mandarine resize-none text-sm bg-white dark:bg-slate-900 dark:text-white shadow-inner"></textarea>
             </div>
             <div class="px-6 py-4 bg-gray-50/50 dark:bg-slate-900/50 flex justify-end gap-3 rounded-b-3xl">
-                <button @click="showRulesModal = false" class="px-5 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl">Fermer</button>
+                <button @click="showRulesModal = false" class="px-5 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl">Annuler</button>
+                <button @click="saveRules()" class="px-5 py-2 bg-gradient-brand-horizontal text-white text-sm font-bold rounded-xl shadow-md hover:opacity-90">Enregistrer</button>
             </div>
         </div>
     </div>
@@ -1030,6 +1046,7 @@
                 onlineUsers: [],
                 showOnlineUsersList: true,
                 socketConnected: false,
+                rulesText: localStorage.getItem('campusRulesText') || "RÈGLES DE CONFIDENTIALITÉ\n\n1. Vos données personnelles sont utilisées uniquement dans le cadre académique.\n2. Vos messages sont visibles par les membres de votre classe.\n3. Tout contenu inapproprié entraîne une exclusion immédiate.\n4. L'administration se réserve le droit de modérer les échanges.\n5. En vous inscrivant, vous acceptez ces conditions.",
 
                 init() {
                     this.initApp();
@@ -1260,9 +1277,26 @@
                     });
 
                     this.socket.on('receive_flash_info', (data) => {
+                        // Afficher la bannière flash
                         this.flashInfoPreview = data.text;
                         this.flashInfoActive = true;
-                        setTimeout(() => { this.flashInfoActive = false; }, 5000);
+                        setTimeout(() => { this.flashInfoActive = false; }, 8000);
+                        
+                        // Aussi injecter dans le panneau de notifications
+                        this.notifications = [{
+                            id: Date.now(),
+                            title: '📢 Info Flash',
+                            message: data.text,
+                            time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                            sender: data.sender || 'Administration'
+                        }, ...this.notifications];
+                        this.unreadCount++;
+                        
+                        // Son de notification
+                        if (this.soundEnabled) {
+                            const audio = document.getElementById('notifAudio');
+                            if (audio) audio.play().catch(() => {});
+                        }
                     });
 
                     this.socket.on('global_online_users', (users) => {
@@ -1510,6 +1544,11 @@
                 switchView(view) {
                     this.currentView = view;
                     if (view === 'chat') this.scrollToBottom();
+                    // Recharger les données admin à chaque accès
+                    if (view === 'admin' && (this.currentUser?.role === 'ADMIN' || this.currentUser?.role === 'MODERATOR')) {
+                        this.fetchAdminStats();
+                        this.fetchAdminUsers();
+                    }
                     this.$nextTick(() => { lucide.createIcons(); });
                 },
                 
@@ -1567,6 +1606,14 @@
                     }
                 },
                 
+                saveRules() {
+                    localStorage.setItem('campusRulesText', this.rulesText);
+                    this.showRulesModal = false;
+                    // Feedback visuel
+                    const notif = { id: Date.now(), title: '✅ Règles sauvegardées', message: 'Les règles RGPD ont été mises à jour.', time: new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) };
+                    this.notifications = [notif, ...this.notifications];
+                },
+
                 publishFlashInfo() {
                     if(!this.flashInfoText.trim()) return;
                     if (this.socket) {
