@@ -3,7 +3,7 @@ services:
     name: campus-link
     env: node
     buildCommand: npm install && npx prisma generate
-    startCommand: npx prisma migrate deploy && npm start
+    startCommand: npx prisma migrate deploy && node prisma/seed.js && npm start
     envVars:
       - key: NODE_ENV
         value: production

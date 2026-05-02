@@ -118,7 +118,8 @@ const init = (server) => {
         });
 
         // Add additional data if present
-        if (type === 'FILE' && file) {
+        const upperType = (type || 'TEXT').toUpperCase();
+        if (upperType === 'FILE' && file) {
           await prisma.file.create({
             data: {
               messageId: message.id,
@@ -128,7 +129,7 @@ const init = (server) => {
               mimetype: file.mimetype
             }
           });
-        } else if (type === 'POLL' && poll) {
+        } else if (upperType === 'POLL' && poll) {
           await prisma.poll.create({
             data: {
               messageId: message.id,
@@ -137,7 +138,7 @@ const init = (server) => {
               votes: JSON.stringify([])
             }
           });
-        } else if (type === 'SNIPPET' && snippet) {
+        } else if (upperType === 'SNIPPET' && snippet) {
           await prisma.snippet.create({
             data: {
               messageId: message.id,

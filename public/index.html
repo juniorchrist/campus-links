@@ -141,13 +141,66 @@
     </style>
 </head>
 <body class="font-sans antialiased" x-init="initApp()">
+    <script>
+        // PWA LifeCycle & Failsafe Logic
+        (function() {
+            // 1. Force entry if stuck
+            window.addEventListener('load', () => {
+                const failsafe = setTimeout(() => {
+                    const appElement = document.querySelector('[x-data]');
+                    if (appElement && appElement.__x) {
+                        const data = appElement.__x.$data;
+                        if (data.showSplash) {
+                            console.warn('PWA Failsafe: Forcing app entry...');
+                            data.showSplash = false;
+                        }
+                    } else {
+                        // Alpine n'a même pas démarré
+                        document.body.classList.add('alpine-failed');
+                        console.error('Alpine failed to initialize.');
+                    }
+                }, 3500);
 
-    <!-- Splash Screen -->
+                // Si Alpine démarre, on peut annuler le failsafe si on veut, 
+                // mais le check showSplash suffit.
+            });
+
+            // 2. PWA Cache & Update Management
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    // Rechargement automatique lors d'une mise à jour du SW
+                    window.location.reload();
+                });
+                
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js')
+                        .then(reg => {
+                            // Vérifier les mises à jour au chargement
+                            reg.update();
+                            console.log('SW Registered & Updated');
+                        })
+                        .catch(err => console.log('SW Error:', err));
+                });
+            }
+
+            // 3. Early Socket.io Connection
+            window.addEventListener('DOMContentLoaded', () => {
+                const token = localStorage.getItem('campusToken');
+                if (token && window.io) {
+                    console.log('PWA Early Connect: Initializing socket...');
+                    // Le socket sera réellement initialisé par Alpine, 
+                    // mais on s'assure que le script est prêt.
+                }
+            });
+        })();
+    </script>
+
+    <!-- Splash Screen (Pas de x-cloak ici pour affichage immédiat) -->
     <div x-show="showSplash" 
          x-transition:leave="transition ease-in-out duration-700 transform"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-105"
-         class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-brand overflow-hidden" x-cloak>
+         class="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-gradient-brand overflow-hidden">
         
         <!-- Background Abstract Circles -->
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-60">
@@ -237,10 +290,12 @@
 
     <!-- Main App Container -->
     <div x-show="!showSplash && isLoggedIn" 
+         x-cloak
+         style="display: none;"
          x-transition:enter="transition ease-out duration-700 delay-300"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
-         class="flex h-screen w-full overflow-hidden" x-cloak>
+         class="flex h-screen w-full overflow-hidden" :style="!showSplash && isLoggedIn ? 'display: flex' : 'display: none'">
 
     <!-- Audio Element for notifications -->
     <audio id="notifAudio" src="data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" preload="auto"></audio>
@@ -258,11 +313,9 @@
     <!-- Sidebar -->
     <aside :class="{
                 '-translate-x-full': !isSidebarOpen, 
-                'translate-x-0': isSidebarOpen,
-                'w-72': !isSidebarCollapsed,
-                'w-20': isSidebarCollapsed
+                'translate-x-0': isSidebarOpen
             }" 
-           class="glass fixed inset-y-0 left-0 z-50 md:relative flex flex-col transition-all duration-300 ease-in-out border-r border-white/20 dark:border-white/5 shadow-lg">
+           class="glass fixed inset-y-0 left-0 z-[60] md:relative flex flex-col w-[85vw] sm:w-72 transition-all duration-300 ease-in-out border-r border-white/20 dark:border-white/5 shadow-lg">
         
         <!-- Sidebar Header -->
         <div class="h-16 flex items-center justify-between px-4 border-b border-white/20 dark:border-white/5 shrink-0">
@@ -272,11 +325,6 @@
                 </div>
                 <h1 class="text-xl font-bold dark:text-white tracking-tight whitespace-nowrap">Campus Link</h1>
             </div>
-            <div class="flex items-center justify-center w-full" x-show="isSidebarCollapsed" x-cloak>
-                <div class="p-2 bg-gradient-brand-horizontal rounded-xl text-white shadow-sm">
-                    <i data-lucide="graduation-cap" class="w-6 h-6"></i>
-                </div>
-            </div>
             <button @click="isSidebarOpen = false" class="md:hidden p-2 text-brand-dark dark:text-white/70 hover:bg-white/30 dark:hover:bg-white/10 rounded-lg">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
@@ -284,107 +332,46 @@
 
         <!-- Room List -->
         <div class="flex-1 overflow-y-auto py-4">
-            <div class="px-4 mb-2 flex items-center justify-between" x-show="!isSidebarCollapsed">
+            <div class="px-4 mb-2 flex items-center justify-between">
                 <h2 class="text-xs font-semibold text-brand-dark/60 dark:text-white/50 uppercase tracking-wider">Salles de Cours</h2>
-                <button x-show="currentUser?.role === 'ADMIN'" @click="showRoomModal = true" class="p-1 text-brand-mandarine hover:bg-brand-mandarine/10 rounded-md transition-colors">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                </button>
             </div>
             <ul class="space-y-1 px-2 mb-6">
                 <template x-for="room in rooms" :key="room.id">
                     <li>
                         <button @click="selectRoom(room.id)" 
-                                :class="{'bg-brand-mandarine/20 border-r-4 border-brand-mandarine dark:bg-white/10': activeRoomId === room.id, 'hover:bg-white/40 dark:hover:bg-white/5': activeRoomId !== room.id}"
-                                class="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors duration-200 text-left relative group">
-                            
+                                :class="{'bg-brand-mandarine/20 border-r-4 border-brand-mandarine dark:bg-white/10': activeRoomId === room.id}"
+                                class="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/40 dark:hover:bg-white/5 transition-colors duration-200 text-left">
                             <div class="p-2 bg-brand-mandarine/10 rounded-lg text-brand-mandarine">
                                 <i data-lucide="hash" class="w-4 h-4"></i>
                             </div>
-                            
-                            <span class="font-medium text-brand-dark dark:text-white/90 truncate flex-1" x-show="!isSidebarCollapsed" x-text="room.name"></span>
-                            
-                            <span x-show="!isSidebarCollapsed" class="bg-brand-mandarine text-white text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 shadow-sm" x-text="room.studentCount || 0"></span>
-
-                            <div x-show="isSidebarCollapsed" class="absolute left-full ml-2 px-2 py-1 bg-brand-dark dark:bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity" x-cloak>
-                                <span x-text="room.name"></span> (<span x-text="room.students"></span>)
-                            </div>
+                            <span class="font-medium text-brand-dark dark:text-white/90 truncate flex-1" x-text="room.name"></span>
+                            <span class="bg-brand-mandarine text-white text-[10px] font-bold px-2 py-1 rounded-full" x-text="room.studentCount || 0"></span>
                         </button>
                     </li>
                 </template>
             </ul>
 
-            <div class="px-4 mb-2" x-show="!isSidebarCollapsed">
-                <h2 class="text-xs font-semibold text-brand-dark/60 dark:text-white/50 uppercase tracking-wider">Membres en ligne</h2>
+            <div class="px-4 mb-2">
+                <h2 class="text-xs font-semibold text-brand-dark/60 dark:text-white/50 uppercase tracking-wider">Membres de ma classe</h2>
             </div>
             
-            <!-- Online Users Section -->
-            <div class="flex-1 overflow-hidden flex flex-col">
-                <!-- Header with toggle -->
-                <div class="flex items-center justify-between px-4 py-2 border-b border-white/10 dark:border-white/5">
-                    <h3 x-show="!isSidebarCollapsed" class="text-xs font-bold text-brand-dark/60 dark:text-white/60 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="users" class="w-3 h-3"></i>
-                        <span>En ligne</span>
-                        <span class="bg-brand-mint/20 text-brand-mint px-1.5 py-0.5 rounded-full text-[10px]" x-text="onlineUsers.filter(u => u.online).length"></span>
-                    </h3>
-                    <button @click="showOnlineUsersList = !showOnlineUsersList" x-show="!isSidebarCollapsed" class="p-1 text-brand-dark/40 dark:text-white/40 hover:text-brand-dark dark:hover:text-white transition-colors">
-                        <i data-lucide="chevron-down" class="w-4 h-4" :class="showOnlineUsersList ? 'rotate-180' : ''"></i>
-                    </button>
-                </div>
-                
-                <!-- Online Users List -->
-                <div x-show="showOnlineUsersList && !isSidebarCollapsed" x-transition class="flex-1 overflow-y-auto">
-                    <ul class="space-y-1 px-2 py-2">
-                        <template x-for="user in (onlineUsers.filter(u => u.online) || [])" :key="user.id">
-                            <li>
-                                <div @click="openProfile(user.name)" class="w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors duration-200 hover:bg-white/40 dark:hover:bg-white/5 text-left relative group cursor-pointer">
-                                    <div class="relative flex-shrink-0">
-                                        <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm">
-                                            <img :src="getAvatar(user.name)" class="w-full h-full object-cover">
-                                        </div>
-                                        <div class="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse"></div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-brand-dark dark:text-white truncate" x-text="user.name"></p>
-                                        <p class="text-xs text-brand-dark/60 dark:text-white/60 truncate" x-text="user.class || 'Membre'"></p>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                                    </div>
-                                </div>
-                            </li>
-                        </template>
-                        
-                        <!-- Offline users (collapsed) -->
-                        <template x-for="user in (onlineUsers.filter(u => !u.online) || [])" :key="'offline-' + user.id">
-                            <li class="opacity-50">
-                                <div class="w-full flex items-center gap-2 px-3 py-1.5 text-left">
-                                    <div class="relative flex-shrink-0">
-                                        <div class="w-6 h-6 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600">
-                                            <img :src="getAvatar(user.name)" class="w-full h-full object-cover opacity-60">
-                                        </div>
-                                        <div class="absolute bottom-0 right-0 w-1.5 h-1.5 bg-gray-400 border border-white dark:border-slate-800 rounded-full"></div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="user.name"></p>
-                                    </div>
-                                </div>
-                            </li>
-                        </template>
-                        
-                        <div x-show="!onlineUsers || onlineUsers.length === 0" class="px-4 py-6 text-center">
-                            <i data-lucide="users" class="w-6 h-6 mx-auto mb-2 text-gray-400"></i>
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Personne en ligne</p>
+            <!-- Online Users List -->
+            <div class="px-2 space-y-1">
+                <template x-for="user in filteredOnlineUsers" :key="user.id">
+                    <div @click="openProfile(user.name); if(window.innerWidth < 768) isSidebarOpen = false;" 
+                         class="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/40 dark:hover:bg-white/5 transition-colors cursor-pointer group">
+                        <div class="relative flex-shrink-0">
+                            <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm">
+                                <img :src="getAvatar(user.name)" class="w-full h-full object-cover">
+                            </div>
+                            <div x-show="user.online" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse"></div>
                         </div>
-                    </ul>
-                </div>
-                
-                <!-- Collapsed state indicator -->
-                <div x-show="isSidebarCollapsed" class="px-4 py-2 text-center">
-                    <div class="w-8 h-8 mx-auto bg-brand-mint/20 rounded-full flex items-center justify-center">
-                        <span class="text-xs font-bold text-brand-mint" x-text="onlineUsers.filter(u => u.online).length || 0"></span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-brand-dark dark:text-white truncate" x-text="user.name"></p>
+                            <p class="text-[10px] text-brand-dark/50 dark:text-white/50 uppercase font-bold" x-text="user.online ? 'En ligne' : 'Hors ligne'"></p>
+                        </div>
                     </div>
-                    <p class="text-[8px] text-gray-400 mt-1">En ligne</p>
-                </div>
+                </template>
             </div>
         </div>
         
@@ -394,9 +381,9 @@
                 <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-brand-mint shadow-sm flex-shrink-0">
                     <img :src="getAvatar(currentUser?.firstname + ' ' + currentUser?.lastname)" class="w-full h-full object-cover">
                 </div>
-                <div x-show="!isSidebarCollapsed" class="flex-1 min-w-0">
+                <div class="flex-1 min-w-0">
                     <p class="text-sm font-semibold text-brand-dark dark:text-white truncate" x-text="currentUser?.firstname + ' ' + currentUser?.lastname"></p>
-                    <button @click="logout()" class="text-[10px] font-bold text-red-500 uppercase tracking-wider hover:underline">Déconnexion</button>
+                    <p class="text-[10px] text-gray-400" x-text="currentUser?.className"></p>
                 </div>
             </div>
         </div>
@@ -406,10 +393,10 @@
     <main class="flex-1 flex flex-col min-w-0 h-full relative z-10 transition-all duration-300">
         
         <!-- Header -->
-        <header class="h-16 glass z-20 flex items-center justify-between px-4 lg:px-6 shadow-sm border-b border-white/20 dark:border-white/5 shrink-0 relative">
+        <header class="h-16 glass z-[50] flex items-center justify-between px-4 lg:px-6 shadow-sm border-b border-white/20 dark:border-white/5 shrink-0 relative">
             <!-- Left: Toggle & Room Name -->
             <div class="flex items-center gap-3 sm:gap-4 flex-1">
-                <button @click="window.innerWidth < 768 ? isSidebarOpen = true : isSidebarCollapsed = !isSidebarCollapsed" class="p-2 rounded-lg text-brand-dark dark:text-white/80 hover:bg-white/40 dark:hover:bg-white/10 transition-colors">
+                <button @click="isSidebarOpen = true" class="p-2 rounded-lg text-brand-dark dark:text-white/80 hover:bg-white/40 dark:hover:bg-white/10 transition-colors md:hidden">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
                 <div class="flex items-center gap-2">
@@ -597,15 +584,33 @@
                                 <!-- Type: TEXT -->
                                 <p x-show="msg.type === 'text' || !msg.type" class="text-sm leading-relaxed break-words whitespace-pre-wrap" x-html="highlightSearch(msg.text)"></p>
                                 
-                                <!-- Type: FILE -->
-                                <div x-show="msg.type === 'file'" @click="window.open(msg.file?.url, '_blank')" class="flex items-center gap-3 p-2 bg-white/20 dark:bg-black/20 rounded-xl cursor-pointer hover:bg-white/30 dark:hover:bg-black/30 transition-colors">
-                                    <div class="w-10 h-10 bg-white/50 dark:bg-black/40 rounded-lg flex items-center justify-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                    </div>
-                                    <div class="flex-1 overflow-hidden">
-                                        <p class="text-sm font-semibold truncate" x-text="msg.file?.name"></p>
-                                        <p class="text-xs opacity-70" x-text="msg.file?.size"></p>
-                                    </div>
+                                <!-- Type: FILE / IMAGE -->
+                                <div x-show="msg.type === 'file'" class="mt-1">
+                                    <!-- Si c'est une image -->
+                                    <template x-if="msg.file?.isImage">
+                                        <div class="relative group cursor-pointer overflow-hidden rounded-xl border border-white/20" @click="window.open(msg.file?.url, '_blank')">
+                                            <img :src="msg.file?.url" class="w-full max-h-64 object-cover hover:scale-105 transition-transform duration-500">
+                                            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <i data-lucide="maximize-2" class="w-6 h-6 text-white"></i>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- Si c'est un document -->
+                                    <template x-if="!msg.file?.isImage">
+                                        <div @click="window.open(msg.file?.url, '_blank')" class="flex items-center gap-3 p-3 bg-white/20 dark:bg-black/20 rounded-xl cursor-pointer hover:bg-white/30 dark:hover:bg-black/30 transition-colors border border-white/10">
+                                            <div class="w-10 h-10 bg-white/40 dark:bg-black/40 rounded-lg flex items-center justify-center shadow-inner">
+                                                <i data-lucide="file-text" class="w-6 h-6"></i>
+                                            </div>
+                                            <div class="flex-1 overflow-hidden">
+                                                <p class="text-sm font-semibold truncate" x-text="msg.file?.name"></p>
+                                                <p class="text-[10px] opacity-70" x-text="msg.file?.size"></p>
+                                            </div>
+                                            <button class="p-2 bg-brand-mandarine text-white rounded-lg shadow-sm hover:opacity-90">
+                                                <i data-lucide="download" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </template>
                                 </div>
 
                                 <!-- Type: POLL -->
@@ -666,7 +671,7 @@
             </div>
 
             <!-- Input Area -->
-            <div x-show="currentUser?.role !== 'ADMIN'" class="p-3 sm:p-4 border-t border-white/20 dark:border-white/5 shrink-0 bg-white/20 dark:bg-black/20 backdrop-blur-md relative z-20">
+            <div x-show="currentView === 'chat' && currentUser?.role !== 'ADMIN'" class="p-3 sm:p-4 border-t border-white/20 dark:border-white/5 shrink-0 bg-white/20 dark:bg-black/20 backdrop-blur-md relative z-20">
                 <form @submit.prevent="sendMessage" class="max-w-4xl mx-auto relative flex flex-col gap-2">
                     <!-- Reply Banner -->
                     <div x-show="replyingTo" x-transition class="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl p-3 border border-white/50 dark:border-white/5 flex items-center justify-between shadow-sm" x-cloak>
@@ -717,251 +722,11 @@
             </div>
 
             <!-- Admin Observer Mode Info -->
+            <!-- Admin Observer Mode Info -->
             <div x-show="currentUser?.role === 'ADMIN'" class="p-4 sm:p-6 border-t border-white/20 dark:border-white/5 bg-gray-50/50 dark:bg-slate-900/50 text-center relative z-20">
                 <p class="text-sm font-medium text-brand-dark/60 dark:text-white/40 flex items-center justify-center gap-2">
                     <i data-lucide="shield-alert" class="w-4 h-4 text-brand-mandarine"></i> Mode Observateur : Les administrateurs ne peuvent pas envoyer de messages dans les salons.
                 </p>
-            </div>
-        </div>
-
-        <!-- View: Admin Dashboard -->
-        <div x-show="currentView === 'admin'" x-cloak class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-4rem)] glass border-none" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-4" x-transition:enter-end="opacity-100 translate-x-0">
-            
-            <div class="max-w-6xl mx-auto space-y-6">
-                <div class="bg-white/40 dark:bg-black/20 p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                        <h2 class="text-2xl font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                            <i data-lucide="shield" class="w-6 h-6 text-brand-mandarine"></i> Dashboard Admin
-                        </h2>
-                        <p class="text-brand-dark/70 dark:text-white/60 text-sm mt-1">Supervision de la plateforme Campus Link</p>
-                    </div>
-                    <button @click="logout()" class="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl font-bold text-sm transition-colors flex items-center gap-2">
-                        <i data-lucide="log-out" class="w-4 h-4"></i> Déconnexion
-                    </button>
-                </div>
-
-                <!-- Section Actions Rapides -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mandarine/20 relative overflow-hidden group">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                                <i data-lucide="plus-circle" class="w-5 h-5 text-brand-mandarine"></i> Gestion des Classes
-                            </h3>
-                        </div>
-                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Créez de nouvelles salles de cours pour les différentes filières. Elles apparaîtront automatiquement dans le formulaire d'inscription.</p>
-                        <button @click="showRoomModal = true" class="w-full py-3 bg-brand-mandarine text-white text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                            <i data-lucide="plus" class="w-4 h-4"></i> Créer une nouvelle classe
-                        </button>
-                    </div>
-                    
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mint/20 relative overflow-hidden group">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                                <i data-lucide="mail" class="w-5 h-5 text-brand-mint"></i> Nouveau Message Flash
-                            </h3>
-                        </div>
-                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Envoyez une notification urgente à tous les étudiants actuellement connectés sur la plateforme.</p>
-                        <div class="flex gap-2">
-                            <input type="text" x-model="flashInfoText" placeholder="Votre message..." class="flex-1 bg-white/50 dark:bg-slate-900 border-none rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-mint dark:text-white">
-                            <button @click="publishFlashInfo()" class="px-4 py-2.5 bg-brand-mint text-brand-dark text-xs font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity">Envoyer</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section Statistiques (Widgets) -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Carte 1 -->
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                        <div class="absolute -right-8 -top-8 w-32 h-32 bg-brand-mandarine/10 rounded-full group-hover:scale-110 transition-transform"></div>
-                        <div class="flex items-center gap-5 relative z-10">
-                            <div class="w-14 h-14 bg-brand-mandarine/20 rounded-2xl flex items-center justify-center text-brand-mandarine shadow-inner">
-                                <i data-lucide="users" class="w-7 h-7"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-semibold text-brand-dark/60 dark:text-white/60 uppercase tracking-wide">Étudiants en ligne</h3>
-                                <p class="text-4xl font-bold text-brand-dark dark:text-white mt-1" x-text="stats.onlineNow || members.length"></p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Carte 2 -->
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                        <div class="absolute -right-8 -top-8 w-32 h-32 bg-green-500/10 rounded-full group-hover:scale-110 transition-transform"></div>
-                        <div class="flex items-center gap-5 relative z-10">
-                            <div class="w-14 h-14 bg-green-500/20 rounded-2xl flex items-center justify-center text-green-500 shadow-inner">
-                                <i data-lucide="trending-up" class="w-7 h-7"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-semibold text-brand-dark/60 dark:text-white/60 uppercase tracking-wide">Utilisateurs Totaux</h3>
-                                <p class="text-4xl font-bold text-brand-dark dark:text-white mt-1" x-text="stats.totalUsers"></p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Carte 3 -->
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                        <div class="absolute -right-8 -top-8 w-32 h-32 bg-brand-jaune/10 rounded-full group-hover:scale-110 transition-transform"></div>
-                        <div class="flex items-center gap-5 relative z-10">
-                            <div class="w-14 h-14 bg-brand-jaune/20 rounded-2xl flex items-center justify-center text-brand-jaune shadow-inner">
-                                <i data-lucide="message-square" class="w-7 h-7"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-semibold text-brand-dark/60 dark:text-white/60 uppercase tracking-wide">Salons Actifs</h3>
-                                <p class="text-4xl font-bold text-brand-dark dark:text-white mt-1" x-text="stats.activeRooms"></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Ligne 2 : Flash Info et Confidentialité -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Outil Flash Info -->
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5 flex flex-col">
-                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2 mb-4">
-                            <i data-lucide="zap" class="w-5 h-5 text-brand-jaune"></i> Flash Info
-                        </h3>
-                        <div class="space-y-4 flex-1">
-                            <textarea x-model="flashInfoText" class="w-full h-24 p-4 rounded-xl border border-gray-200 dark:border-slate-600 focus:ring-2 focus:ring-brand-mandarine resize-none text-sm bg-white dark:bg-slate-900 dark:text-white shadow-inner" placeholder="Annonce à diffuser à tous les étudiants..."></textarea>
-                            
-                            <div x-show="flashInfoActive" class="p-3 bg-orange-500 text-white rounded-xl shadow-md flex items-start gap-3 animate-[slideUp_0.3s_ease-out]" x-cloak>
-                                <i data-lucide="megaphone" class="w-5 h-5 shrink-0 mt-0.5"></i>
-                                <div class="flex-1">
-                                    <p class="text-xs font-bold uppercase opacity-80 mb-1">Aperçu de la diffusion</p>
-                                    <p class="text-sm" x-text="flashInfoPreview"></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-4 flex justify-end">
-                            <button @click="publishFlashInfo()" :disabled="!flashInfoText.trim()" class="px-5 py-2.5 bg-gradient-brand-horizontal text-white text-sm font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity disabled:opacity-50">Diffuser l'annonce</button>
-                        </div>
-                    </div>
-
-                    <!-- Gestion de la Confidentialité -->
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5">
-                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2 mb-4">
-                            <i data-lucide="lock" class="w-5 h-5 text-brand-mint"></i> Confidentialité
-                        </h3>
-                        <div class="space-y-4">
-                            <label class="flex items-center justify-between p-3 bg-white/40 dark:bg-black/20 rounded-xl cursor-pointer hover:bg-white/60 dark:hover:bg-black/40 transition-colors">
-                                <div>
-                                    <span class="text-sm font-bold text-brand-dark dark:text-white block">Mode Anonyme</span>
-                                    <span class="text-xs text-brand-dark/60 dark:text-white/50">Masque les noms réels dans le chat</span>
-                                </div>
-                                <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none" :class="settings.anonymousMode ? 'bg-brand-mandarine' : 'bg-gray-300 dark:bg-slate-600'">
-                                    <input type="checkbox" x-model="settings.anonymousMode" class="sr-only">
-                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition" :class="settings.anonymousMode ? 'translate-x-6' : 'translate-x-1'"></span>
-                                </div>
-                            </label>
-                            
-                            <label class="flex items-center justify-between p-3 bg-white/40 dark:bg-black/20 rounded-xl cursor-pointer hover:bg-white/60 dark:hover:bg-black/40 transition-colors">
-                                <div>
-                                    <span class="text-sm font-bold text-brand-dark dark:text-white block">Auto-suppression</span>
-                                    <span class="text-xs text-brand-dark/60 dark:text-white/50">Purge les messages après 24h</span>
-                                </div>
-                                <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none" :class="settings.autoDelete ? 'bg-brand-mandarine' : 'bg-gray-300 dark:bg-slate-600'">
-                                    <input type="checkbox" x-model="settings.autoDelete" class="sr-only">
-                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition" :class="settings.autoDelete ? 'translate-x-6' : 'translate-x-1'"></span>
-                                </div>
-                            </label>
-
-                            <label class="flex items-center justify-between p-3 bg-white/40 dark:bg-black/20 rounded-xl cursor-pointer hover:bg-white/60 dark:hover:bg-black/40 transition-colors border border-red-500/20">
-                                <div>
-                                    <span class="text-sm font-bold text-red-500 block">Verrouillage du salon</span>
-                                    <span class="text-xs text-red-500/70">Empêche l'envoi de nouveaux messages</span>
-                                </div>
-                                <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none" :class="settings.lockRoom ? 'bg-red-500' : 'bg-gray-300 dark:bg-slate-600'">
-                                    <input type="checkbox" x-model="settings.lockRoom" class="sr-only">
-                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition" :class="settings.lockRoom ? 'translate-x-6' : 'translate-x-1'"></span>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tableau des Membres -->
-                <div class="glass-darker rounded-2xl shadow-sm border border-white/50 dark:border-white/5 overflow-hidden pb-16">
-                    <div class="p-6 border-b border-white/20 dark:border-white/5 flex items-center justify-between">
-                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                            <i data-lucide="users" class="w-5 h-5 text-brand-dark/70 dark:text-white/70"></i> 
-                            Utilisateurs en Ligne
-                            <span class="text-sm font-normal text-brand-mint bg-brand-mint/20 px-2 py-1 rounded-full" x-text="`${onlineUsers.length} connectés`"></span>
-                        </h3>
-                        <button @click="showOnlineUsers = !showOnlineUsers" class="text-brand-dark/60 dark:text-white/60 hover:text-brand-dark dark:hover:text-white transition-colors">
-                            <i data-lucide="chevron-down" class="w-5 h-5" :class="showOnlineUsers ? 'rotate-180' : ''"></i>
-                        </button>
-                    </div>
-                    <div x-show="showOnlineUsers" x-transition class="overflow-x-auto">
-                        <table class="w-full text-left text-sm text-brand-dark dark:text-white/90">
-                            <thead class="bg-white/30 dark:bg-black/20 text-xs uppercase font-bold text-brand-dark/60 dark:text-white/50">
-                                <tr>
-                                    <th class="px-6 py-4">Utilisateur</th>
-                                    <th class="px-6 py-4">Classe</th>
-                                    <th class="px-6 py-4">Statut</th>
-                                    <th class="px-6 py-4">Dernière activité</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/20 dark:divide-white/5">
-                                <template x-for="user in (onlineUsers || [])" :key="user.id">
-                                    <tr class="hover:bg-white/40 dark:hover:bg-black/10 transition-colors">
-                                        <td class="px-6 py-4 flex items-center gap-3">
-                                            <div class="relative">
-                                                <div class="w-9 h-9 bg-brand-mandarine/20 text-brand-mandarine rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                                                    <span x-text="user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'"></span>
-                                                </div>
-                                                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></div>
-                                            </div>
-                                            <div>
-                                                <span class="font-semibold text-brand-dark dark:text-white" x-text="user.name"></span>
-                                                <p class="text-xs text-brand-dark/60 dark:text-white/60" x-text="user.email"></p>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-brand-mint/20 text-brand-mint" x-text="user.class || 'Non défini'"></span>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                                <span class="text-xs font-medium text-green-600 dark:text-green-400">En ligne</span>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <span class="text-xs text-brand-dark/60 dark:text-white/60" x-text="user.lastSeen ? 'Il y a ' + getTimeAgo(user.lastSeen) : 'Maintenant'"></span>
-                                        </td>
-                                    </tr>
-                                </template>
-                                <tr x-show="!onlineUsers || onlineUsers.length === 0">
-                                    <td colspan="4" class="px-6 py-8 text-center text-brand-dark/60 dark:text-white/60">
-                                        <i data-lucide="users" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                                        <p>Aucun utilisateur en ligne pour le moment</p>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                                        <td class="px-6 py-4">
-                                            <span class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider" 
-                                                  :class="member.role === 'ADMIN' ? 'bg-brand-mandarine/20 text-brand-mandarine' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300'" x-text="member.role"></span>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <span class="flex items-center gap-1.5 text-xs font-semibold" :class="member.online ? 'text-green-500' : 'text-gray-400'">
-                                                <span class="w-2 h-2 rounded-full" :class="member.online ? 'bg-green-500' : 'bg-gray-400'"></span>
-                                                <span x-text="member.online ? 'En ligne' : 'Hors ligne'"></span>
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 text-right relative" x-data="{ openMenu: false }">
-                                            <button @click="openMenu = !openMenu" @click.away="openMenu = false" class="p-1.5 text-gray-500 hover:text-brand-dark dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                                                <i data-lucide="more-horizontal" class="w-5 h-5"></i>
-                                            </button>
-                                            <div x-show="openMenu" class="absolute right-6 top-10 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 z-[70] overflow-hidden" x-transition x-cloak>
-                                                <button @click="openMenu = false" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"><i data-lucide="mic-off" class="w-3.5 h-3.5"></i> Sourdine</button>
-                                                <button @click="openMenu = false" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"><i data-lucide="user-minus" class="w-3.5 h-3.5"></i> Exclure</button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -989,7 +754,8 @@
                                 <i data-lucide="file-text" class="w-8 h-8"></i>
                             </div>
                             <h3 class="font-bold text-sm text-brand-dark dark:text-white truncate w-full mb-1" x-text="fileMsg.file.name"></h3>
-                            <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-3" x-text="fileMsg.file.size + ' • Partagé par ' + fileMsg.sender"></p>
+                            <p class="text-[10px] text-brand-dark/60 dark:text-white/50 mb-3" x-text="fileMsg.file.size + ' • Par ' + fileMsg.sender"></p>
+                            <p class="text-[9px] text-brand-mandarine font-bold uppercase tracking-widest mb-4" x-text="fileMsg.file.date"></p>
                             <button class="mt-auto px-4 py-2 w-full bg-white/50 dark:bg-slate-700 hover:bg-white dark:hover:bg-slate-600 text-brand-dark dark:text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
                                 <i data-lucide="download" class="w-4 h-4"></i> Télécharger
                             </button>
@@ -997,14 +763,57 @@
                     </template>
                 </div>
             </div>
+        </div>
 
         <!-- View: Admin Dashboard -->
         <div x-show="currentView === 'admin'" x-cloak class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-4rem)] glass border-none" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-4" x-transition:enter-end="opacity-100 translate-x-0">
             <div class="max-w-7xl mx-auto space-y-6">
+                <!-- Admin Header -->
+                <div class="bg-white/40 dark:bg-black/20 p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                            <i data-lucide="shield" class="w-6 h-6 text-brand-mandarine"></i> Dashboard Admin
+                        </h2>
+                        <p class="text-brand-dark/70 dark:text-white/60 text-sm mt-1">Supervision de la plateforme Campus Link</p>
+                    </div>
+                </div>
+
+                <!-- Admin Quick Actions -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mandarine/20 relative overflow-hidden group">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                <i data-lucide="plus-circle" class="w-5 h-5 text-brand-mandarine"></i> Gestion des Classes
+                            </h3>
+                        </div>
+                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Créez de nouvelles salles de cours pour les différentes filières.</p>
+                        <button @click="showRoomModal = true" class="w-full py-3 bg-brand-mandarine text-white text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Créer une nouvelle classe
+                        </button>
+                    </div>
+                    
+                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mint/20 relative overflow-hidden group">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                <i data-lucide="mail" class="w-5 h-5 text-brand-mint"></i> Nouveau Message Flash
+                            </h3>
+                        </div>
+                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-4">Envoyez une notification urgente à tous les étudiants connectés.</p>
+                        <div class="flex gap-2">
+                            <input type="text" x-model="flashInfoText" placeholder="Votre message..." class="flex-1 bg-white/50 dark:bg-slate-900 border-none rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-mint dark:text-white">
+                            <button @click="publishFlashInfo()" class="px-4 py-2.5 bg-brand-mint text-brand-dark text-xs font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity">Envoyer</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="glass-darker p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5">
                         <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-brand-dark/60 dark:text-white/60">Utilisateurs</p>
+                                <p class="text-2xl font-bold text-brand-dark dark:text-white" x-text="adminUsers.length || 0"></p>
+                            </div>
                             <div class="w-12 h-12 bg-brand-mandarine/20 text-brand-mandarine rounded-xl flex items-center justify-center">
                                 <i data-lucide="users" class="w-6 h-6"></i>
                             </div>
@@ -1012,15 +821,19 @@
                     </div>
                     <div class="glass-darker p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5">
                         <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-brand-dark/60 dark:text-white/60">Salons</p>
+                                <p class="text-2xl font-bold text-brand-dark dark:text-white" x-text="rooms.length || 0"></p>
+                            </div>
                             <div class="w-12 h-12 bg-brand-mint/20 text-brand-mint rounded-xl flex items-center justify-center">
-                                <i data-lucide="message-square" class="w-6 h-6"></i>
+                                <i data-lucide="hash" class="w-6 h-6"></i>
                             </div>
                         </div>
                     </div>
                     <div class="glass-darker p-6 rounded-2xl shadow-sm border border-white/50 dark:border-white/5">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm font-semibold text-brand-dark/60 dark:text-white/60">Messages Aujourd'hui</p>
+                                <p class="text-sm font-semibold text-brand-dark/60 dark:text-white/60">Messages</p>
                                 <p class="text-2xl font-bold text-brand-dark dark:text-white" x-text="adminStats.messagesToday || 0"></p>
                             </div>
                             <div class="w-12 h-12 bg-brand-jaune/20 text-brand-jaune rounded-xl flex items-center justify-center">
@@ -1041,65 +854,14 @@
                     </div>
                 </div>
 
-                <!-- Recent Activity -->
-                <div class="glass-darker rounded-2xl shadow-sm border border-white/50 dark:border-white/5 overflow-hidden">
-                    <div class="p-6 border-b border-white/20 dark:border-white/5">
-                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                            <i data-lucide="activity" class="w-5 h-5 text-brand-mandarine"></i> 
-                            Activité Récente
-                        </h3>
-                    </div>
-                    <div class="p-6 max-h-96 overflow-y-auto">
-                        <template x-for="activity in (adminStats.recentActivity || [])" :key="activity.id">
-                            <div class="flex items-start gap-3 mb-4 pb-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
-                                <div class="w-8 h-8 bg-brand-jaune/20 text-brand-jaune rounded-full flex items-center justify-center flex-shrink-0">
-                                    <i data-lucide="message-circle" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <p class="text-sm">
-                                        <span class="font-semibold text-brand-dark dark:text-white" x-text="activity.user.firstname + ' ' + activity.user.lastname"></span>
-                                        <span class="text-brand-dark/60 dark:text-white/60"> a envoyé un message dans </span>
-                                        <span class="font-semibold text-brand-mint" x-text="activity.room.name"></span>
-                                    </p>
-                                    <p class="text-xs text-brand-dark/50 dark:text-white/50 mt-1" x-text="new Date(activity.createdAt).toLocaleString('fr-FR')"></p>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Quick Room Access for Admin -->
-                <div class="glass-darker rounded-2xl shadow-sm border border-white/50 dark:border-white/5 overflow-hidden">
-                    <div class="p-6 border-b border-white/20 dark:border-white/5">
-                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                            <i data-lucide="door-open" class="w-5 h-5 text-brand-mandarine"></i> 
-                            Accès Rapide aux Salles
-                        </h3>
-                        <p class="text-sm text-brand-dark/60 dark:text-white/60 mt-1">Cliquez pour rejoindre directement n'importe quelle salle</p>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <template x-for="room in (rooms || [])" :key="room.id">
-                                <div @click="joinRoomAsAdmin(room.id)" class="glass-darker p-4 rounded-xl border border-white/30 dark:border-white/10 hover:border-brand-mint/50 hover:bg-brand-mint/10 transition-all cursor-pointer group">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <div class="w-10 h-10 bg-brand-mint/20 text-brand-mint rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <i data-lucide="hash" class="w-5 h-5"></i>
-                                        </div>
-                                        <div class="flex items-center gap-2 text-xs text-brand-dark/60 dark:text-white/60">
-                                            <i data-lucide="users" class="w-3 h-3"></i>
-                                            <span x-text="room._count?.members || 0"></span>
-                                        </div>
-                                    </div>
-                                    <h4 class="font-semibold text-brand-dark dark:text-white mb-1" x-text="room.name"></h4>
-                                    <p class="text-xs text-brand-dark/60 dark:text-white/60" x-text="room.description || 'Rejoindre cette salle'"></p>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- User Management -->
                 <div class="glass-darker rounded-2xl shadow-sm border border-white/50 dark:border-white/5 overflow-hidden">
+                    <div class="p-6 border-b border-white/20 dark:border-white/5 flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                            <i data-lucide="users" class="w-5 h-5 text-brand-mandarine"></i> 
+                            Gestion des Utilisateurs
+                        </h3>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-brand-dark dark:text-white/90">
                             <thead class="bg-white/30 dark:bg-black/20 text-xs uppercase font-bold text-brand-dark/60 dark:text-white/50">
@@ -1108,7 +870,6 @@
                                     <th class="px-6 py-4">Email</th>
                                     <th class="px-6 py-4">Rôle</th>
                                     <th class="px-6 py-4">Messages</th>
-                                    <th class="px-6 py-4">Inscription</th>
                                     <th class="px-6 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -1130,7 +891,6 @@
                                                   x-text="user.role"></span>
                                         </td>
                                         <td class="px-6 py-4" x-text="user._count.messages"></td>
-                                        <td class="px-6 py-4" x-text="new Date(user.createdAt).toLocaleDateString('fr-FR')"></td>
                                         <td class="px-6 py-4 text-right">
                                             <select x-model="user.role" @change="updateUserRole(user.id, user.role)" class="text-xs px-2 py-1 border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg">
                                                 <option value="STUDENT">Étudiant</option>
@@ -1151,7 +911,7 @@
     <!-- Modals -->
 
     <!-- Modal Règles de confidentialité -->
-    <div x-show="showRulesModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6" x-cloak>
+    <div x-show="showRulesModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" x-cloak>
         <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showRulesModal = false"></div>
         <div class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-2xl rounded-3xl shadow-2xl relative z-10 flex flex-col border border-white/50 dark:border-white/10" x-show="showRulesModal" x-transition>
             <div class="px-6 py-4 border-b border-gray-200/50 dark:border-slate-700/50 flex items-center justify-between">
@@ -1167,94 +927,9 @@
         </div>
     </div>
 
-    <!-- Modal Poll -->
-    <div x-show="showPollModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
-        <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showPollModal = false"></div>
-        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden" x-show="showPollModal" x-transition>
-            <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
-                <h3 class="font-bold text-brand-dark dark:text-white">Créer un sondage</h3>
-                <button @click="showPollModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="p-5 space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Question</label>
-                    <input type="text" x-model="pollData.question" class="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl px-4 py-2 focus:ring-2 focus:ring-brand-mandarine focus:outline-none" placeholder="Votre question ?">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Options</label>
-                    <template x-for="(opt, idx) in pollData.options" :key="idx">
-                        <div class="flex gap-2 mb-2">
-                            <input type="text" x-model="pollData.options[idx]" class="flex-1 border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl px-4 py-2 focus:ring-2 focus:ring-brand-mandarine focus:outline-none" :placeholder="'Option ' + (idx + 1)">
-                            <button x-show="pollData.options.length > 2" @click="pollData.options.splice(idx, 1)" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"><i data-lucide="minus" class="w-4 h-4"></i></button>
-                        </div>
-                    </template>
-                    <button x-show="pollData.options.length < 4" @click="pollData.options.push('')" class="text-xs font-medium text-brand-mandarine hover:text-brand-jaune flex items-center gap-1 mt-2"><i data-lucide="plus" class="w-3 h-3"></i> Ajouter une option</button>
-                </div>
-            </div>
-            <div class="p-5 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex justify-end">
-                <button @click="sendPoll()" :disabled="!pollData.question || pollData.options.some(o => !o)" class="px-5 py-2 bg-gradient-brand-horizontal text-white font-semibold rounded-xl disabled:opacity-50">Envoyer</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Modal Snippet -->
-    <div x-show="showSnippetModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
-        <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showSnippetModal = false"></div>
-        <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden" x-show="showSnippetModal" x-transition>
-            <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
-                <h3 class="font-bold text-brand-dark dark:text-white">Insérer du code</h3>
-                <button @click="showSnippetModal = false" class="text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="p-5 space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Langage</label>
-                    <select x-model="snippetData.language" class="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl px-4 py-2 focus:outline-none">
-                        <option value="javascript">JavaScript</option>
-                        <option value="html">HTML</option>
-                        <option value="css">CSS</option>
-                        <option value="python">Python</option>
-                        <option value="text">Texte Brut</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Code</label>
-                    <textarea x-model="snippetData.code" class="w-full h-40 border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-brand-mandarine focus:outline-none" placeholder="Collez votre code ici..."></textarea>
-                </div>
-            </div>
-            <div class="p-5 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex justify-end">
-                <button @click="sendSnippet()" :disabled="!snippetData.code" class="px-5 py-2 bg-gradient-brand-horizontal text-white font-semibold rounded-xl disabled:opacity-50">Insérer</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Modal Profil Utilisateur -->
-    <div x-show="selectedProfile" class="fixed inset-0 z-[70] flex items-center justify-center p-4" x-cloak>
-        <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="closeProfile()"></div>
-        <div class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 flex flex-col overflow-hidden border border-white/50 dark:border-white/10" x-show="selectedProfile" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
-            <button @click="closeProfile()" class="absolute top-4 right-4 p-2 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-full text-brand-dark dark:text-white transition-colors z-20">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-            <div class="h-32 bg-gradient-brand w-full relative">
-                <div class="absolute -bottom-10 left-1/2 -translate-x-1/2">
-                    <div :class="selectedProfile?.color" class="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-brand-dark shadow-xl border-4 border-white dark:border-slate-800" x-text="selectedProfile?.initials"></div>
-                    <div class="absolute bottom-1 right-1 w-5 h-5 border-2 border-white dark:border-slate-800 rounded-full" :class="selectedProfile?.online ? 'bg-green-500' : 'bg-gray-400'"></div>
-                </div>
-            </div>
-            <div class="pt-14 pb-8 px-6 text-center">
-                <h3 class="text-xl font-bold text-brand-dark dark:text-white mb-1" x-text="selectedProfile?.name"></h3>
-                <span class="inline-block px-3 py-1 bg-brand-mandarine/20 text-brand-mandarine text-[10px] font-bold uppercase tracking-widest rounded-full mb-4" x-text="selectedProfile?.role"></span>
-                <p class="text-sm text-brand-dark/70 dark:text-white/60 leading-relaxed mb-6">Étudiant(e) passionné(e) par le développement web, l'UI/UX et toujours prêt(e) à échanger sur Campus Link ! 🚀</p>
-                <div class="flex items-center justify-center gap-4">
-                    <button class="flex-1 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-brand-dark dark:text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="message-circle" class="w-4 h-4"></i> Message
-                    </button>
-                    <button class="flex-1 py-2.5 bg-gradient-brand-horizontal text-white text-sm font-semibold rounded-xl shadow-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                        <i data-lucide="user-plus" class="w-4 h-4"></i> Ajouter
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Scripts Logic -->
     <script>
@@ -1294,6 +969,9 @@
                 
                 // Dashboard Stats
                 stats: { totalUsers: 0, activeRooms: 0, messagesToday: 0, onlineNow: 0 },
+                adminStats: { messagesToday: 0, onlineNow: 0, recentActivity: [] },
+                adminUsers: [],
+                adminOnlineUsers: [],
                 
                 // Customization
                 darkMode: false,
@@ -1310,52 +988,60 @@
                 searchQuery: '',
                 isSearching: false,
                 
-                // Modals
+                // Modals & Forms
                 showRulesModal: false,
                 showPollModal: false,
                 showSnippetModal: false,
                 showRoomModal: false,
+                showAnnouncementModal: false,
                 roomName: '',
+                pollData: { question: '', options: ['', ''] },
+                snippetData: { language: 'javascript', code: '' },
+                announcementData: { title: '', message: '', targetRooms: [] },
+                replyingTo: null,
+                selectedProfile: null,
                 
                 // Flash Info
                 flashInfoText: '',
                 flashInfoActive: false,
                 flashInfoPreview: '',
                 
-                init() {
-                    this.$watch('showNotifications', val => { if(val) this.$nextTick(() => lucide.createIcons()); });
-                },
-                
-                // Privacy Settings
-                settings: {
-                    anonymousMode: false,
-                    autoDelete: false,
-                    lockRoom: false
-                },
+                // Settings
+                settings: { anonymousMode: false, autoDelete: false, lockRoom: false },
                 
                 members: [],
                 rooms: [],
                 messages: {},
                 isTyping: false,
+                onlineUsers: [],
+                showOnlineUsersList: true,
+
+                init() {
+                    this.initApp();
+                    // Rafraîchir les icônes quand les notifications s'ouvrent
+                    this.$watch('showNotifications', val => { if(val) this.$nextTick(() => lucide.createIcons()); });
+                    // Rafraîchir les icônes quand la vue change
+                    this.$watch('currentView', val => { this.$nextTick(() => lucide.createIcons()); });
+                },
                 
                 async initApp() {
-                    // Force dismiss splash after timeout regardless of errors
-                    setTimeout(() => {
-                        this.showSplash = false;
-                        this.$nextTick(() => { lucide.createIcons(); });
-                    }, 2000);
-
+                    // Initialisation immédiate du socket si le token existe (PWA Ready)
+                    if (this.token) {
+                        this.initSocket();
+                    }
+                    
                     try {
+                        // Charger les préférences utilisateur
                         if(localStorage.getItem('campusTheme') === 'dark') this.darkMode = true;
                         this.$watch('darkMode', val => localStorage.setItem('campusTheme', val ? 'dark' : 'light'));
                         
                         if (window.Notification && Notification.permission === "default") Notification.requestPermission();
                         window.addEventListener('pwa-install-available', () => { this.canInstall = true; });
 
-                        // Fetch Public Classes for Registration (don't await to not block)
+                        // Récupération des classes publiques (non bloquant)
                         this.fetchPublicClasses().catch(e => console.error(e));
 
-                        // Initial Auth Check
+                        // Vérification de l'authentification
                         if (this.token) {
                             const res = await fetch('/api/auth/me', {
                                 headers: { 'Authorization': `Bearer ${this.token}` }
@@ -1375,8 +1061,81 @@
                             }
                         }
                     } catch (e) {
-                        console.error('App initialization failed', e);
+                        console.error('Erreur lors de l\'initialisation de l\'app', e);
+                    } finally {
+                        // On attend que Alpine soit bien prêt et que les données soient là
+                        this.$nextTick(() => {
+                            setTimeout(() => {
+                                this.showSplash = false;
+                                this.$nextTick(() => { lucide.createIcons(); });
+                            }, 500); // Délai minimal pour un effet fluide
+                        });
                     }
+                },
+
+                async fetchInitialData() {
+                    try {
+                        const res = await fetch('/api/rooms', {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        if (res.ok) {
+                            this.rooms = (await res.json()).map(r => ({
+                                ...r,
+                                studentCount: r._count?.members || 0
+                            }));
+                            
+                            // Redirection vers la classe de l'étudiant ou la première salle dispo
+                            if (this.rooms.length > 0 && !this.activeRoomId) {
+                                const classRoom = this.rooms.find(r => r.name === this.currentUser?.className);
+                                this.selectRoom(classRoom ? classRoom.id : this.rooms[0].id);
+                            }
+                        }
+                    } catch (e) { console.error('Failed to fetch initial data', e); }
+                },
+
+                async fetchAdminStats() {
+                    try {
+                        const res = await fetch('/api/admin/stats', {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        if (res.ok) {
+                            this.adminStats = await res.json();
+                            this.stats = this.adminStats;
+                        }
+                    } catch (e) { console.error('Failed to fetch admin stats', e); }
+                },
+
+                async fetchAdminUsers() {
+                    try {
+                        const res = await fetch('/api/admin/users', {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        if (res.ok) {
+                            this.adminUsers = await res.json();
+                        }
+                    } catch (e) { console.error('Failed to fetch admin users', e); }
+                },
+
+                updateOnlineUsers() {
+                    if (this.currentUser?.role === 'ADMIN') {
+                        this.adminOnlineUsers = this.onlineUsers.filter(m => m.online);
+                    }
+                },
+
+                async updateUserRole(userId, role) {
+                    try {
+                        const res = await fetch(`/api/admin/users/${userId}/role`, {
+                            method: 'PUT',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.token}`
+                            },
+                            body: JSON.stringify({ role })
+                        });
+                        if (res.ok) {
+                            this.fetchAdminUsers();
+                        }
+                    } catch (e) { console.error('Failed to update user role', e); }
                 },
 
                 async handleLogin() {
@@ -1395,13 +1154,12 @@
                             this.isLoggedIn = true;
                             await this.fetchInitialData();
                             this.initSocket();
-                            if (this.currentUser.role === 'ADMIN') this.fetchStats();
-                        } else {
-                            this.authError = data.error || 'Erreur lors de la connexion.';
-                        }
-                    } catch (e) {
-                        this.authError = 'Impossible de contacter le serveur.';
-                    }
+                            if (this.currentUser.role === 'ADMIN') {
+                                this.fetchAdminStats();
+                                this.fetchAdminUsers();
+                            }
+                        } else { this.authError = data.error || 'Identifiants incorrects.'; }
+                    } catch (e) { this.authError = 'Serveur injoignable.'; }
                 },
 
                 async handleRegister() {
@@ -1420,38 +1178,8 @@
                             this.isLoggedIn = true;
                             await this.fetchInitialData();
                             this.initSocket();
-                            if (this.currentUser.role === 'ADMIN') this.fetchStats();
-                        } else {
-                            this.authError = data.error || 'Erreur lors de l\'inscription.';
-                        }
-                    } catch (e) {
-                        this.authError = 'Impossible de contacter le serveur.';
-                    }
-                },
-
-                async fetchInitialData() {
-                    try {
-                        const res = await fetch('/api/rooms', {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        this.rooms = (await res.json()).map(r => ({
-                            ...r,
-                            studentCount: r._count?.members || 0
-                        }));
-                        
-                        // Default redirection: Class Room if exists, else first
-                        if (this.rooms.length > 0) {
-                            const classRoom = this.rooms.find(r => r.name === this.currentUser.className);
-                            
-                            if (classRoom) {
-                                this.activeRoomId = classRoom.id;
-                            } else {
-                                this.activeRoomId = this.rooms[0].id;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Failed to fetch rooms', e);
-                    }
+                        } else { this.authError = data.error || 'Erreur lors de l\'inscription.'; }
+                    } catch (e) { this.authError = 'Serveur injoignable.'; }
                 },
 
                 initSocket() {
@@ -1478,9 +1206,17 @@
                         this.messages[msg.roomId].push(normalized);
                         if (msg.roomId === this.activeRoomId) this.scrollToBottom();
                         
-                        if (document.hidden || this.currentView !== 'chat') {
+                        // Gestion des notifications si l'utilisateur n'est pas sur le chat
+                        if (document.hidden || this.currentView !== 'chat' || msg.roomId !== this.activeRoomId) {
                             this.unreadCount++;
+                            this.notifications.unshift({
+                                id: Date.now(),
+                                title: `Nouveau message de ${normalized.sender}`,
+                                message: normalized.text.length > 50 ? normalized.text.substring(0, 50) + '...' : normalized.text,
+                                time: normalized.time
+                            });
                         }
+                        
                         if (this.soundEnabled) {
                             const audio = document.getElementById('notifAudio');
                             if (audio) audio.play().catch(e => console.log(e));
@@ -1494,13 +1230,12 @@
                     });
 
                     this.socket.on('global_online_users', (users) => {
-                        this.members = users.map(m => {
+                        this.onlineUsers = users.map(m => {
                             const initials = m.name.split(' ').map(n => n[0]).join('').toUpperCase();
                             const colors = ['bg-brand-mandarine', 'bg-brand-mint', 'bg-brand-jaune', 'bg-orange-400', 'bg-red-400'];
                             const color = colors[Math.abs(this.hashCode(m.id)) % colors.length];
                             return { ...m, initials, color };
                         });
-                        // Mettre à jour la liste des utilisateurs en ligne pour l'interface admin
                         this.updateOnlineUsers();
                     });
 
@@ -1650,10 +1385,22 @@
                     }
 
                     if (msg.file) {
+                        // Détection d'image pour affichage multimédia
+                        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.file.originalName);
                         normalized.file = {
                             name: msg.file.originalName,
                             size: (msg.file.size / 1024 / 1024).toFixed(2) + ' MB',
-                            url: `/uploads/${msg.file.storedName}`
+                            url: `/uploads/${msg.file.storedName}`,
+                            isImage: isImg,
+                            date: date.toLocaleDateString('fr-FR')
+                        };
+                        // Auto-archivage dans l'onglet ressources (déjà géré par la propriété calculée roomFiles)
+                    }
+
+                    if (msg.snippet) {
+                        normalized.snippet = {
+                            language: msg.snippet.language,
+                            code: msg.snippet.code
                         };
                     }
 
@@ -1692,7 +1439,17 @@
                 },
                 
                 get roomFiles() {
+                    // Fonction autoArchive() implémentée via getter pour synchronisation temps réel
                     return this.currentMessages.filter(m => m.type === 'file');
+                },
+                
+                get filteredOnlineUsers() {
+                    // Filtre les membres pour n'afficher que ceux de la même classe ou tous si admin
+                    return this.onlineUsers.filter(u => {
+                        const isSameClass = u.className === this.currentUser?.className;
+                        const isAdmin = this.currentUser?.role === 'ADMIN';
+                        return isSameClass || isAdmin;
+                    });
                 },
                 
                 get pinnedMessages() {
@@ -1927,102 +1684,15 @@
                     }
                 },
 
-                // Admin Functions
-                adminStats: {},
-                adminUsers: [],
-                userSearchQuery: '',
-                userRoleFilter: '',
-                showAnnouncementModal: false,
-                announcementData: { title: '', message: '', targetRooms: [] },
-                showOnlineUsers: true,
-                onlineUsers: [],
-                showOnlineUsersList: true,
-
-                async fetchAdminStats() {
-                    try {
-                        const res = await fetch('/api/admin/stats', {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        if (res.ok) {
-                            this.adminStats = await res.json();
-                        }
-                    } catch (e) {
-                        console.error('Failed to fetch admin stats', e);
-                    }
-                },
-
-                async searchUsers() {
-                    try {
-                        const params = new URLSearchParams({
-                            search: this.userSearchQuery,
-                            role: this.userRoleFilter
-                        });
-                        const res = await fetch(`/api/admin/users?${params}`, {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            this.adminUsers = data.users;
-                        }
-                    } catch (e) {
-                        console.error('Failed to search users', e);
-                    }
-                },
-
-                async updateUserRole(userId, newRole) {
-                    try {
-                        const response = await fetch(`/api/admin/users/${userId}/role`, {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${this.token}`
-                            },
-                            body: JSON.stringify({ role: newRole })
-                        });
-                        
-                        if (response.ok) {
-                            this.showNotification('Rôle utilisateur mis à jour avec succès', 'success');
-                            await this.fetchAdminUsers();
-                        } else {
-                            this.showNotification('Erreur lors de la mise à jour du rôle', 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error updating user role:', error);
-                        this.showNotification('Erreur lors de la mise à jour du rôle', 'error');
-                    }
-                },
-
-                async fetchAdminUsers() {
-                    try {
-                        const res = await fetch('/api/admin/users', {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            this.adminUsers = data.users;
-                        }
-                    } catch (e) {
-                        console.error('Failed to fetch admin users', e);
-                    }
-                },
-
-                switchView(view) {
-                    this.currentView = view;
-                },
-
                 showNotification(message, type = 'info') {
-                    // Créer une notification temporaire
                     const notification = {
                         id: Date.now(),
                         message,
                         type,
                         time: new Date().toLocaleTimeString('fr-FR')
                     };
-                    
                     this.notifications.unshift(notification);
                     this.unreadCount++;
-                    
-                    // Supprimer la notification après 5 secondes
                     setTimeout(() => {
                         const index = this.notifications.findIndex(n => n.id === notification.id);
                         if (index > -1) {
@@ -2030,43 +1700,6 @@
                             this.unreadCount = Math.max(0, this.unreadCount - 1);
                         }
                     }, 5000);
-                },
-
-                async joinRoomAsAdmin(roomId) {
-                    try {
-                        // Switch to chat view first
-                        this.switchView('chat');
-                        
-                        // Wait a bit for the view to switch
-                        setTimeout(async () => {
-                            try {
-                                const response = await fetch(`/api/rooms/${roomId}/join`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${this.token}`
-                                    }
-                                });
-                                
-                                if (response.ok) {
-                                    const roomData = await response.json();
-                                    this.currentRoom = roomData;
-                                    this.showNotification(`Rejoint la salle: ${roomData.name}`, 'success');
-                                    
-                                    // Load messages for this room
-                                    await this.loadMessages();
-                                } else {
-                                    this.showNotification('Erreur lors de la jonction de la salle', 'error');
-                                }
-                            } catch (error) {
-                                console.error('Error joining room:', error);
-                                this.showNotification('Erreur lors de la jonction de la salle', 'error');
-                            }
-                        }, 300);
-                    } catch (error) {
-                        console.error('Error switching to chat:', error);
-                        this.showNotification('Erreur lors de la navigation vers le chat', 'error');
-                    }
                 },
 
                 getTimeAgo(date) {
@@ -2077,21 +1710,7 @@
                     return `${Math.floor(seconds / 86400)} jours`;
                 },
 
-                updateOnlineUsers() {
-                    // Mettre à jour la liste des utilisateurs en ligne depuis les données Socket.IO
-                    this.onlineUsers = (this.members || []).map(user => ({
-                        ...user,
-                        name: user.name || `${user.firstname} ${user.lastname}`,
-                        class: user.className || this.getUserClass(user.name || `${user.firstname} ${user.lastname}`, user.email),
-                        online: true
-                    }));
-                    
-                    // On pourrait aussi ajouter les membres hors ligne ici si on avait la liste complète des membres du salon
-                },
-
                 getUserClass(name, email) {
-                    // Logique pour déterminer la classe de l'utilisateur
-                    // Vous pouvez adapter cette logique selon votre structure de données
                     if (email && email.includes('@')) {
                         const domain = email.split('@')[1];
                         if (domain.includes('student')) return 'Étudiant';
@@ -2099,31 +1718,6 @@
                         if (domain.includes('teacher')) return 'Professeur';
                     }
                     return 'Membre';
-                },
-
-                async sendGlobalAnnouncement() {
-                    try {
-                        const res = await fetch('/api/admin/announcements', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${this.token}`
-                            },
-                            body: JSON.stringify(this.announcementData)
-                        });
-                        if (res.ok) {
-                            this.showAnnouncementModal = false;
-                            this.announcementData = { title: '', message: '', targetRooms: [] };
-                        }
-                    } catch (e) {
-                        console.error('Failed to send announcement', e);
-                    }
-                },
-
-                async deleteMessage(messageId) {
-                    if (this.socket) {
-                        this.socket.emit('delete_message', { messageId });
-                    }
                 },
 
                 async loadMessages() {
@@ -2136,7 +1730,7 @@
     </script>
     </div>
     <!-- Modal Global Announcement -->
-    <div x-show="showAnnouncementModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
+    <div x-show="showAnnouncementModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4" x-cloak>
         <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showAnnouncementModal = false"></div>
         <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden border border-white/50 dark:border-white/10" x-show="showAnnouncementModal" x-transition>
             <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
@@ -2165,7 +1759,7 @@
     </div>
 
     <!-- Modal Create Room -->
-    <div x-show="showRoomModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
+    <div x-show="showRoomModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4" x-cloak>
         <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showRoomModal = false"></div>
         <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden border border-white/50 dark:border-white/10" x-show="showRoomModal" x-transition>
             <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
@@ -2183,6 +1777,106 @@
             <div class="p-5 bg-gray-50/50 dark:bg-slate-900/50 flex justify-end gap-3">
                 <button @click="showRoomModal = false" class="px-5 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl transition-colors">Annuler</button>
                 <button @click="createNewRoom()" :disabled="!roomName.trim()" class="px-5 py-2 bg-gradient-brand-horizontal text-white text-sm font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity disabled:opacity-50">Créer le salon</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Poll -->
+    <div x-show="showPollModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
+        <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showPollModal = false"></div>
+        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl relative z-[100] flex flex-col overflow-hidden border border-white/50 dark:border-white/10" x-show="showPollModal" x-transition>
+            <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-brand-mandarine"></i> Créer un sondage
+                </h3>
+                <button @click="showPollModal = false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-400 uppercase">Question</label>
+                    <input type="text" x-model="pollData.question" class="w-full bg-gray-50 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm mt-1 dark:text-white" placeholder="Quelle est votre question ?">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-gray-400 uppercase">Options</label>
+                    <template x-for="(opt, index) in pollData.options" :key="index">
+                        <div class="flex gap-2">
+                            <input type="text" x-model="pollData.options[index]" class="flex-1 bg-gray-50 dark:bg-slate-900 border-none rounded-xl px-4 py-2 text-sm dark:text-white" :placeholder="'Option ' + (index + 1)">
+                            <button @click="pollData.options.splice(index, 1)" x-show="pollData.options.length > 2" class="text-red-500 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </template>
+                    <button @click="pollData.options.push('')" class="text-xs font-bold text-brand-mandarine flex items-center gap-1 mt-2 hover:underline">
+                        <i data-lucide="plus" class="w-3 h-3"></i> Ajouter une option
+                    </button>
+                </div>
+            </div>
+            <div class="p-5 bg-gray-50/50 dark:bg-slate-900/50 flex justify-end gap-3">
+                <button @click="sendPoll()" :disabled="!pollData.question.trim()" class="px-6 py-2 bg-gradient-brand-horizontal text-white font-bold rounded-xl shadow-md hover:opacity-90 disabled:opacity-50">Publier le sondage</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Snippet -->
+    <div x-show="showSnippetModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-cloak>
+        <div class="absolute inset-0 bg-brand-dark/40 dark:bg-black/60 backdrop-blur-sm" @click="showSnippetModal = false"></div>
+        <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-3xl shadow-2xl relative z-[100] flex flex-col overflow-hidden border border-white/50 dark:border-white/10" x-show="showSnippetModal" x-transition>
+            <div class="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                    <i data-lucide="code" class="w-5 h-5 text-brand-mandarine"></i> Partager du code
+                </h3>
+                <button @click="showSnippetModal = false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="text-xs font-bold text-gray-400 uppercase">Langage</label>
+                        <select x-model="snippetData.language" class="w-full bg-gray-50 dark:bg-slate-900 border-none rounded-xl px-4 py-2 text-sm mt-1 dark:text-white">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="php">PHP</option>
+                            <option value="sql">SQL</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-400 uppercase">Code</label>
+                    <textarea x-model="snippetData.code" rows="10" class="w-full bg-gray-900 text-green-400 font-mono rounded-xl px-4 py-3 text-sm mt-1 focus:ring-1 focus:ring-brand-mandarine" placeholder="// Collez votre code ici..."></textarea>
+                </div>
+            </div>
+            <div class="p-5 bg-gray-50/50 dark:bg-slate-900/50 flex justify-end gap-3">
+                <button @click="sendSnippet()" :disabled="!snippetData.code.trim()" class="px-6 py-2 bg-gradient-brand-horizontal text-white font-bold rounded-xl shadow-md hover:opacity-90 disabled:opacity-50">Partager le code</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal User Profile -->
+    <div x-show="selectedProfile" class="fixed inset-0 z-[100] flex items-center justify-center p-4" x-cloak>
+        <div class="absolute inset-0 bg-brand-dark/60 backdrop-blur-md" @click="selectedProfile = null"></div>
+        <div class="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl shadow-2xl relative z-10 overflow-hidden border border-white/50 dark:border-white/10" x-transition>
+            <div class="h-24 bg-gradient-brand-horizontal"></div>
+            <div class="px-6 pb-8 -mt-12 text-center">
+                <div class="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-xl mx-auto overflow-hidden bg-white mb-4">
+                    <img :src="getAvatar(selectedProfile?.name)" class="w-full h-full object-cover">
+                </div>
+                <h3 class="text-xl font-bold text-brand-dark dark:text-white" x-text="selectedProfile?.name"></h3>
+                <p class="text-brand-mandarine font-bold text-sm uppercase tracking-widest mt-1" x-text="selectedProfile?.role || 'Étudiant'"></p>
+                
+                <div class="grid grid-cols-2 gap-4 mt-8">
+                    <div class="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-2xl">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase">Classe</p>
+                        <p class="text-sm font-bold text-brand-dark dark:text-white" x-text="selectedProfile?.className || 'Non définie'"></p>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-2xl">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase">Statut</p>
+                        <p class="text-sm font-bold flex items-center justify-center gap-1.5" :class="selectedProfile?.online ? 'text-brand-mint' : 'text-gray-400'">
+                            <span class="w-2 h-2 rounded-full" :class="selectedProfile?.online ? 'bg-brand-mint' : 'bg-gray-400'"></span>
+                            <span x-text="selectedProfile?.online ? 'En ligne' : 'Hors ligne'"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <button @click="selectedProfile = null" class="w-full mt-8 py-3 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-brand-dark dark:text-white font-bold rounded-2xl transition-colors">Fermer le profil</button>
             </div>
         </div>
     </div>
