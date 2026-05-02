@@ -443,8 +443,15 @@
                 </div>
             </div>
 
-            <!-- Right: Notifs, Install, Settings -->
+            <!-- Right: Socket Status, Notifs, Install, Settings -->
             <div class="flex items-center gap-1 sm:gap-2 justify-end flex-1">
+                <!-- Socket Connection Indicator -->
+                <div class="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold"
+                     :class="socketConnected ? 'bg-brand-mint/15 text-brand-mint' : 'bg-gray-200/50 dark:bg-slate-700/50 text-gray-400'">
+                    <span class="w-1.5 h-1.5 rounded-full"
+                          :class="socketConnected ? 'bg-brand-mint animate-pulse' : 'bg-gray-400'"></span>
+                    <span x-text="socketConnected ? 'Live' : 'Hors ligne'"></span>
+                </div>
                 <!-- Notifications -->
                 <div class="relative" @click.away="showNotifications = false">
                     <button @click="showNotifications = !showNotifications; unreadCount = 0" class="p-2 relative rounded-lg text-brand-dark dark:text-white/80 hover:bg-white/40 dark:hover:bg-white/10 transition-colors">
@@ -1022,6 +1029,7 @@
                 isTyping: false,
                 onlineUsers: [],
                 showOnlineUsersList: true,
+                socketConnected: false,
 
                 init() {
                     this.initApp();
@@ -1197,37 +1205,57 @@
                     });
                     
                     this.socket.on('connect', () => {
+                        console.log('Socket connecté !');
+                        this.socketConnected = true;
                         if (this.activeRoomId) {
                             this.socket.emit('join_room', { roomId: this.activeRoomId });
                         }
                     });
                     
+                    this.socket.on('disconnect', () => {
+                        console.log('Socket déconnecté.');
+                        this.socketConnected = false;
+                    });
+                    
                     this.socket.on('chat_history', (msgs) => {
-                        this.messages[this.activeRoomId] = msgs.map(m => this.normalizeMessage(m));
-                        this.scrollToBottom();
+                        // Re-assigner pour forcer la réactivité Alpine
+                        this.messages = { 
+                            ...this.messages, 
+                            [this.activeRoomId]: msgs.map(m => this.normalizeMessage(m)) 
+                        };
+                        this.$nextTick(() => { lucide.createIcons(); this.scrollToBottom(); });
                     });
                     
                     this.socket.on('receive_message', (msg) => {
-                        console.log('Nouveau message reçu:', msg);
-                        if (!this.messages[msg.roomId]) this.messages[msg.roomId] = [];
+                        console.log('Message reçu:', msg.content);
                         const normalized = this.normalizeMessage(msg);
-                        this.messages[msg.roomId].push(normalized);
-                        if (msg.roomId === this.activeRoomId) this.scrollToBottom();
                         
-                        // Gestion des notifications si l'utilisateur n'est pas sur le chat
-                        if (document.hidden || this.currentView !== 'chat' || msg.roomId !== this.activeRoomId) {
-                            this.unreadCount++;
-                            this.notifications.unshift({
-                                id: Date.now(),
-                                title: `Nouveau message de ${normalized.sender}`,
-                                message: normalized.text.length > 50 ? normalized.text.substring(0, 50) + '...' : normalized.text,
-                                time: normalized.time
+                        // Fix Réactivité : Re-assigner le tableau pour forcer la mise à jour Alpine
+                        if (!this.messages[msg.roomId]) this.messages[msg.roomId] = [];
+                        this.messages[msg.roomId] = [...this.messages[msg.roomId], normalized];
+                        
+                        if (msg.roomId === this.activeRoomId) {
+                            this.$nextTick(() => { 
+                                lucide.createIcons(); 
+                                this.scrollToBottom(); 
                             });
                         }
                         
-                        if (this.soundEnabled) {
-                            const audio = document.getElementById('notifAudio');
-                            if (audio) audio.play().catch(e => console.log(e));
+                        // Gestion des notifications
+                        if (msg.roomId !== this.activeRoomId && msg.userId !== this.currentUser?.id) {
+                            this.unreadCount++;
+                            const newNotif = {
+                                id: Date.now(),
+                                title: `Nouveau message de ${normalized.sender}`,
+                                message: normalized.text.length > 50 ? normalized.text.substring(0, 50) + '...' : normalized.text,
+                                time: normalized.time,
+                                roomId: msg.roomId
+                            };
+                            this.notifications = [newNotif, ...this.notifications];
+                            if (this.soundEnabled) {
+                                const audio = document.getElementById('notifAudio');
+                                if (audio) audio.play().catch(() => {});
+                            }
                         }
                     });
 
@@ -1364,12 +1392,13 @@
                     let normalized = {
                         ...msg,
                         sender: `${msg.user.firstname} ${msg.user.lastname}`,
-                        text: msg.content,
+                        text: msg.content || '',
                         time: date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0'),
                         sentByMe: msg.userId === this.currentUser.id,
                         reactions: msg.reactions?.map(r => r.emoji) || [],
                         rawReactions: msg.reactions || [],
-                        type: (msg.type || 'TEXT').toLowerCase()
+                        // Toujours en minuscules pour des comparaisons uniformes dans les templates
+                        type: (msg.type || 'text').toLowerCase()
                     };
 
                     if (msg.parent) {
@@ -1447,16 +1476,16 @@
                 },
                 
                 get roomFiles() {
-                    // Fonction autoArchive() implémentée via getter pour synchronisation temps réel
-                    return this.currentMessages.filter(m => m.type === 'file');
+                    // autoArchive: filtre tous les messages de type fichier, insensible à la casse
+                    return this.currentMessages.filter(m => m.file && (m.type === 'file' || m.type === 'FILE'));
                 },
                 
                 get filteredOnlineUsers() {
-                    // Filtre les membres pour n'afficher que ceux de la même classe ou tous si admin
+                    // Filtre les membres pour n'afficher que ceux de la même classe ou tous si admin/modérateur
+                    if (!this.currentUser) return [];
                     return this.onlineUsers.filter(u => {
-                        const isSameClass = u.className === this.currentUser?.className;
-                        const isAdmin = this.currentUser?.role === 'ADMIN';
-                        return isSameClass || isAdmin;
+                        if (this.currentUser.role === 'ADMIN' || this.currentUser.role === 'MODERATOR') return true;
+                        return u.className === this.currentUser.className;
                     });
                 },
                 
@@ -1580,13 +1609,13 @@
 
                 sendPoll() {
                     if (!this.pollData.question.trim()) return;
+                    const options = this.pollData.options.filter(o => o.trim() !== '');
                     this.pushMessage({
-                        type: 'poll',
+                        type: 'POLL',
+                        content: `📊 Sondage: ${this.pollData.question}`,
                         poll: { 
                             question: this.pollData.question, 
-                            options: this.pollData.options.filter(o => o.trim() !== ''),
-                            votes: this.pollData.options.map(() => 0),
-                            votedBy: []
+                            options: options
                         }
                     });
                     this.showPollModal = false;
@@ -1595,8 +1624,10 @@
                 },
 
                 sendSnippet() {
+                    if (!this.snippetData.code.trim()) return;
                     this.pushMessage({
-                        type: 'snippet',
+                        type: 'SNIPPET',
+                        content: `💻 Code ${this.snippetData.language}`,
                         snippet: { language: this.snippetData.language, code: this.snippetData.code }
                     });
                     this.showSnippetModal = false;
