@@ -142,56 +142,97 @@
 </head>
 <body class="font-sans antialiased" x-init="initApp()">
     <script>
-        // PWA LifeCycle & Failsafe Logic
+        // ================================================================
+        // Campus Link - PWA LifeCycle Manager
+        // ================================================================
         (function() {
-            // 1. Force entry if stuck
+
+            // ── 1. FAILSAFE ALPINE ──────────────────────────────────────
+            // Si Alpine est bloqué sur le splash screen après 3.5s → force
             window.addEventListener('load', () => {
-                const failsafe = setTimeout(() => {
-                    const appElement = document.querySelector('[x-data]');
-                    if (appElement && appElement.__x) {
-                        const data = appElement.__x.$data;
-                        if (data.showSplash) {
-                            console.warn('PWA Failsafe: Forcing app entry...');
-                            data.showSplash = false;
+                setTimeout(() => {
+                    const el = document.querySelector('[x-data]');
+                    if (el && el.__x) {
+                        if (el.__x.$data.showSplash) {
+                            console.warn('[Campus] Failsafe: forçage de l\'entrée app');
+                            el.__x.$data.showSplash = false;
                         }
-                    } else {
-                        // Alpine n'a même pas démarré
-                        document.body.classList.add('alpine-failed');
-                        console.error('Alpine failed to initialize.');
                     }
                 }, 3500);
-
-                // Si Alpine démarre, on peut annuler le failsafe si on veut, 
-                // mais le check showSplash suffit.
             });
 
-            // 2. PWA Cache & Update Management
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    // Rechargement automatique lors d'une mise à jour du SW
-                    window.location.reload();
-                });
-                
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('./sw.js')
-                        .then(reg => {
-                            // Vérifier les mises à jour au chargement
-                            reg.update();
-                            console.log('SW Registered & Updated');
-                        })
-                        .catch(err => console.log('SW Error:', err));
-                });
-            }
+            // ── 2. SERVICE WORKER + MISE À JOUR PROPRE ──────────────────
+            if (!('serviceWorker' in navigator)) return;
 
-            // 3. Early Socket.io Connection
-            window.addEventListener('DOMContentLoaded', () => {
-                const token = localStorage.getItem('campusToken');
-                if (token && window.io) {
-                    console.log('PWA Early Connect: Initializing socket...');
-                    // Le socket sera réellement initialisé par Alpine, 
-                    // mais on s'assure que le script est prêt.
+            // Anti-boucle de reload : on ne recharge qu'une seule fois
+            // par session en utilisant sessionStorage comme flag.
+            const RELOAD_FLAG = 'campus_sw_reloaded';
+
+            // Écouter les messages du Service Worker
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SW_UPDATED') {
+                    console.log('[Campus] Nouvelle version détectée !', event.data.cacheName);
+
+                    // Ne recharger qu'une seule fois par session
+                    if (sessionStorage.getItem(RELOAD_FLAG)) {
+                        console.log('[Campus] Mise à jour déjà appliquée, pas de rechargement.');
+                        return;
+                    }
+                    sessionStorage.setItem(RELOAD_FLAG, '1');
+
+                    // Afficher le splash screen puis recharger proprement
+                    const splashEl = document.querySelector('[x-data]');
+                    if (splashEl && splashEl.__x) {
+                        splashEl.__x.$data.showSplash = true;
+                        console.log('[Campus] Splash affiché, rechargement dans 1.5s...');
+                    }
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
                 }
             });
+
+            // Écouter aussi le changement de controller (filet de sécurité)
+            let firstActivation = true;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (firstActivation) { firstActivation = false; return; } // Ignorer la 1ère activation
+                if (sessionStorage.getItem(RELOAD_FLAG)) return; // Anti-boucle
+                sessionStorage.setItem(RELOAD_FLAG, '1');
+                console.log('[Campus] Controller changé, rechargement propre...');
+                window.location.reload();
+            });
+
+            // Enregistrement du SW + vérification de mise à jour à chaque chargement
+            window.addEventListener('load', () => {
+                // Nettoyer le flag au démarrage (pour les prochains rechargements)
+                sessionStorage.removeItem(RELOAD_FLAG);
+
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => {
+                        console.log('[Campus] SW enregistré ✓');
+                        // Forcer la vérification d'une nouvelle version
+                        reg.update();
+
+                        // Si un SW en attente existe déjà → l'activer
+                        if (reg.waiting) {
+                            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        }
+
+                        reg.addEventListener('updatefound', () => {
+                            const newWorker = reg.installing;
+                            if (!newWorker) return;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('[Campus] Nouveau SW installé, activation...');
+                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.warn('[Campus] SW Error:', err));
+            });
+
         })();
     </script>
 
