@@ -23,7 +23,7 @@ const init = (server) => {
 
       const user = await prisma.user.findUnique({
         where: { id: decoded.id },
-        select: { id: true, firstname: true, lastname: true, role: true, avatar: true }
+        select: { id: true, firstname: true, lastname: true, role: true, avatar: true, className: true }
       });
 
       if (!user) return next(new Error('Utilisateur non trouvé.'));
@@ -46,7 +46,13 @@ const init = (server) => {
   io.on('connection', (socket) => {
     console.log(`Utilisateur connecté: ${socket.user.firstname} (${socket.id})`);
     
-    globalOnlineUsers.set(socket.user.id, { id: socket.user.id, name: `${socket.user.firstname} ${socket.user.lastname}`, avatar: socket.user.avatar, role: socket.user.role });
+    globalOnlineUsers.set(socket.user.id, { 
+      id: socket.user.id, 
+      name: `${socket.user.firstname} ${socket.user.lastname}`, 
+      avatar: socket.user.avatar, 
+      role: socket.user.role,
+      className: socket.user.className 
+    });
     io.emit('global_online_users', Array.from(globalOnlineUsers.values()));
 
     socket.on('join_room', async ({ roomId }) => {

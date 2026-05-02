@@ -46,7 +46,10 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from public (Frontend)
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', (req, res, next) => {
+    console.log(`[UploadAccess] ${req.url}`);
+    next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // API Routes
 app.use('/api/auth', authRoutes);

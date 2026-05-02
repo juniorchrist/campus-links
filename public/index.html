@@ -750,13 +750,20 @@
                 <div x-show="roomFiles.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     <template x-for="fileMsg in roomFiles" :key="fileMsg.id">
                         <div class="glass-darker p-5 rounded-2xl shadow-sm hover:shadow-md transition-all border border-white/50 dark:border-white/5 flex flex-col items-center text-center group cursor-pointer hover:-translate-y-1">
-                            <div class="w-16 h-16 bg-brand-mint/20 text-brand-mint rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                <i data-lucide="file-text" class="w-8 h-8"></i>
+                            <div class="w-full h-32 mb-4 rounded-xl overflow-hidden bg-brand-mint/10 flex items-center justify-center">
+                                <template x-if="fileMsg.file?.isImage">
+                                    <img :src="fileMsg.file?.url" class="w-full h-full object-cover">
+                                </template>
+                                <template x-if="!fileMsg.file?.isImage">
+                                    <div class="text-brand-mint">
+                                        <i data-lucide="file-text" class="w-12 h-12"></i>
+                                    </div>
+                                </template>
                             </div>
                             <h3 class="font-bold text-sm text-brand-dark dark:text-white truncate w-full mb-1" x-text="fileMsg.file.name"></h3>
-                            <p class="text-[10px] text-brand-dark/60 dark:text-white/50 mb-3" x-text="fileMsg.file.size + ' • Par ' + fileMsg.sender"></p>
+                            <p class="text-[10px] text-brand-dark/60 dark:text-white/50 mb-1" x-text="fileMsg.file.size + ' • Par ' + fileMsg.sender"></p>
                             <p class="text-[9px] text-brand-mandarine font-bold uppercase tracking-widest mb-4" x-text="fileMsg.file.date"></p>
-                            <button class="mt-auto px-4 py-2 w-full bg-white/50 dark:bg-slate-700 hover:bg-white dark:hover:bg-slate-600 text-brand-dark dark:text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                            <button @click="window.open(fileMsg.file?.url, '_blank')" class="mt-auto px-4 py-2 w-full bg-white/50 dark:bg-slate-700 hover:bg-white dark:hover:bg-slate-600 text-brand-dark dark:text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
                                 <i data-lucide="download" class="w-4 h-4"></i> Télécharger
                             </button>
                         </div>
@@ -1201,6 +1208,7 @@
                     });
                     
                     this.socket.on('receive_message', (msg) => {
+                        console.log('Nouveau message reçu:', msg);
                         if (!this.messages[msg.roomId]) this.messages[msg.roomId] = [];
                         const normalized = this.normalizeMessage(msg);
                         this.messages[msg.roomId].push(normalized);
