@@ -61,6 +61,14 @@
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
 
     <style>
         /* Base styles */
@@ -76,29 +84,236 @@
             color: #F1F2F6;
         }
 
-        /* Glassmorphism utilities */
+        /* Glassmorphism utilities - Enhanced WCAG AAA */
         .glass {
-            background: rgba(255, 255, 255, 0.55);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .glass-darker {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .dark .glass {
-            background: rgba(15, 23, 42, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
         .dark .glass-darker {
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Enhanced message bubbles for WCAG AAA contrast */
+        .message-bubble {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-input-container {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .dark .message-bubble,
+        .dark .chat-header,
+        .dark .chat-input-container {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        /* WCAG AAA contrast enhancement for brand colors */
+        .text-brand-mandarine {
+            color: #FF6B35;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .text-brand-mandarine {
+            color: #FF8C5D;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .text-brand-jaune {
+            color: #F7B801;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .text-brand-jaune {
+            color: #FFD23F;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Enhanced Code Snippets */
+        .code-snippet-container {
+            position: relative;
+            margin: 0.5rem 0;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background: #1e293b;
+            border: 1px solid #374151;
+        }
+
+        .code-snippet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: #374151;
+            border-bottom: 1px solid #4b5563;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #d1d5db;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .code-snippet-language {
+            color: #60a5fa;
+        }
+
+        .code-snippet-copy {
+            background: #3b82f6;
+            border: 1px solid #60a5fa;
+            color: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .code-snippet-copy:hover {
+            background: #2563eb;
+            border-color: #3b82f6;
+        }
+
+        .code-snippet-copy:active {
+            transform: scale(0.95);
+        }
+
+        .code-snippet-content {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+            background: #282c34;
+            color: #e2e8f0;
+            font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .code-snippet-content pre {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            color: inherit;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+        }
+
+        .code-snippet-content code {
+            background: transparent !important;
+            color: inherit !important;
+            padding: 0 !important;
+            font-family: inherit !important;
+            font-size: inherit !important;
+        }
+
+        .copy-tooltip {
+            position: absolute;
+            top: -2.5rem;
+            right: 0.5rem;
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            z-index: 50;
+            opacity: 0;
+            transform: translateY(-0.5rem);
+            transition: all 0.2s ease;
+            pointer-events: none;
+        }
+
+        .copy-tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .dark .code-snippet-container {
+            background: #1f2937;
+            border-color: #374151;
+        }
+
+        .dark .code-snippet-header {
+            background: #374151;
+            border-bottom-color: #4b5563;
+            color: #d1d5db;
+        }
+
+        .dark .code-snippet-content {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        /* Mobile Drawer Styles */
+        @media (max-width: 767px) {
+            .mobile-drawer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 80%;
+                max-width: 280px;
+                height: 100vh;
+                z-index: 100;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+            }
+
+            .mobile-drawer.open {
+                transform: translateX(0);
+            }
+
+            .mobile-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 99;
+                opacity: 0;
+                transition: opacity 0.3s ease-in-out;
+                pointer-events: none;
+            }
+
+            .mobile-overlay.show {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .mobile-sidebar-hidden {
+                display: none;
+            }
         }
 
         /* Custom Scrollbar */
@@ -342,14 +557,15 @@
     <audio id="notifAudio" src="data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" preload="auto"></audio>
 
     <!-- Mobile Sidebar Overlay -->
-    <div x-show="isSidebarOpen" class="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity" 
+    <div x-show="showDrawer" class="mobile-overlay" 
          x-transition:enter="transition ease-out duration-300"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
          x-transition:leave="transition ease-in duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         @click="isSidebarOpen = false" x-cloak></div>
+         :class="showDrawer ? 'show' : ''"
+         @click="showDrawer = false" x-cloak></div>
 
     <!-- Sidebar -->
     <aside :class="{
@@ -434,10 +650,10 @@
     <main class="flex-1 flex flex-col min-w-0 h-full relative z-10 transition-all duration-300">
         
         <!-- Header -->
-        <header class="h-16 glass z-[50] flex items-center justify-between px-4 lg:px-6 shadow-sm border-b border-white/20 dark:border-white/5 shrink-0 relative">
+        <header class="h-16 chat-header z-[50] flex items-center justify-between px-4 lg:px-6 shadow-sm border-b border-white/20 dark:border-white/5 shrink-0 relative">
             <!-- Left: Toggle & Room Name -->
             <div class="flex items-center gap-3 sm:gap-4 flex-1">
-                <button @click="isSidebarOpen = true" class="p-2 rounded-lg text-brand-dark dark:text-white/80 hover:bg-white/40 dark:hover:bg-white/10 transition-colors md:hidden">
+                <button @click="showDrawer = true" class="p-2 rounded-lg text-brand-dark dark:text-white/80 hover:bg-white/40 dark:hover:bg-white/10 transition-colors md:hidden">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
                 <div class="flex items-center gap-2">
@@ -616,7 +832,7 @@
 
                             <!-- Actual Bubble depending on Type -->
                             <div :class="[
-                                    msg.sentByMe ? 'bg-gradient-brand-horizontal text-white rounded-br-none' : 'bg-brand-light dark:bg-[#2d2d2d] text-brand-dark dark:text-[#f0f0f0] rounded-bl-none',
+                                    msg.sentByMe ? 'bg-gradient-brand-horizontal text-white rounded-br-none' : 'message-bubble text-brand-dark dark:text-[#f0f0f0] rounded-bl-none',
                                     'px-4 py-3 rounded-2xl shadow-sm relative'
                                  ]">
                                 
@@ -681,12 +897,24 @@
                                 </div>
 
                                 <!-- Type: SNIPPET -->
-                                <div x-show="msg.type === 'snippet'" class="mt-1">
-                                    <div class="flex items-center justify-between bg-gray-900 rounded-t-lg px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-700">
-                                        <span x-text="msg.snippet?.language"></span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                <div x-show="msg.type === 'snippet'" class="mt-1 code-snippet-container">
+                                    <div class="code-snippet-header">
+                                        <span class="code-snippet-language" x-text="msg.snippet?.language || 'code'"></span>
+                                        <button @click="copyToClipboard(msg.snippet?.code)" 
+                                                class="code-snippet-copy"
+                                                x-ref="'copy-' + msg.id">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                                                <path d="M16 8h-6v6h6"/>
+                                                <path d="M8 12h.01"/>
+                                                <path d="M12 12h.01"/>
+                                            </svg>
+                                            <span class="copy-tooltip" x-ref="'tooltip-' + msg.id">Copié !</span>
+                                        </button>
                                     </div>
-                                    <pre class="bg-gray-800 text-green-400 text-xs p-3 rounded-b-lg overflow-x-auto whitespace-pre font-mono"><code x-text="msg.snippet?.code"></code></pre>
+                                    <div class="code-snippet-content">
+                                        <pre><code :class="'language-' + (msg.snippet?.language || 'javascript')" x-text="msg.snippet?.code"></code></pre>
+                                    </div>
                                 </div>
 
                                 <div :class="msg.sentByMe ? 'text-white/80' : 'text-brand-dark/50 dark:text-white/40'" class="text-[10px] text-right mt-1 font-medium" x-text="msg.time"></div>
@@ -719,7 +947,7 @@
             </div>
 
             <!-- Input Area -->
-            <div x-show="currentView === 'chat' && currentUser?.role !== 'ADMIN'" class="p-3 sm:p-4 border-t border-white/20 dark:border-white/5 shrink-0 bg-white/20 dark:bg-black/20 backdrop-blur-md relative z-20">
+            <div x-show="currentView === 'chat' && currentUser?.role !== 'ADMIN'" class="chat-input-container p-3 sm:p-4 border-t border-white/20 dark:border-white/5 shrink-0 relative z-20">
                 <form @submit.prevent="sendMessage" class="max-w-4xl mx-auto relative flex flex-col gap-2">
                     <!-- Reply Banner -->
                     <div x-show="replyingTo" x-transition class="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl p-3 border border-white/50 dark:border-white/5 flex items-center justify-between shadow-sm" x-cloak>
@@ -831,45 +1059,152 @@
                         </h2>
                         <p class="text-brand-dark/70 dark:text-white/60 text-sm mt-1">Supervision de la plateforme Campus Link</p>
                     </div>
+                    
+                    <!-- Admin Quick Actions -->
+                    <div class="flex items-center gap-3">
+                        <!-- Notifications Button -->
+                        <div class="relative" @click.away="showNotifications = false">
+                            <button @click="showNotifications = !showNotifications" class="relative p-3 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-white/30 dark:border-white/10 hover:bg-white dark:hover:bg-slate-700 transition-all group">
+                                <i data-lucide="bell" class="w-5 h-5 text-brand-dark dark:text-white"></i>
+                                <span x-show="unreadCount > 0" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse" x-cloak></span>
+                            </button>
+                            
+                            <!-- Notifications Panel -->
+                            <div x-show="showNotifications" x-transition class="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-[60] overflow-hidden" x-cloak>
+                                <div class="p-4 border-b border-gray-50 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-black/20">
+                                    <h4 class="text-sm font-bold text-brand-dark dark:text-white uppercase tracking-wider">Notifications</h4>
+                                    <button @click="notifications = []" class="text-[10px] font-bold text-brand-mandarine hover:underline">Tout effacer</button>
+                                </div>
+                                <div class="max-h-64 overflow-y-auto">
+                                    <template x-for="n in notifications" :key="n.id">
+                                        <div class="p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer">
+                                            <p class="text-xs font-bold text-brand-dark dark:text-white" x-text="n.title"></p>
+                                            <p class="text-xs text-brand-dark/70 dark:text-white/60 mt-1" x-text="n.message"></p>
+                                            <p class="text-[10px] text-gray-400 mt-2" x-text="n.time"></p>
+                                        </div>
+                                    </template>
+                                    <div x-show="notifications.length === 0" class="p-8 text-center">
+                                        <i data-lucide="bell-off" class="w-8 h-8 text-gray-300 dark:text-slate-700 mx-auto mb-2"></i>
+                                        <p class="text-xs text-gray-400 font-medium">Aucune notification</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Button -->
+                        <button @click="showSettingsMenu = !showSettingsMenu" class="p-3 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-white/30 dark:border-white/10 hover:bg-white dark:hover:bg-slate-700 transition-all">
+                            <i data-lucide="settings" class="w-5 h-5 text-brand-dark dark:text-white"></i>
+                        </button>
+                        
+                        <!-- Install PWA Button -->
+                        <button x-show="canInstall" @click="installPWA()" class="p-3 bg-gradient-brand-horizontal text-white rounded-xl border border-brand-mandarine/20 hover:opacity-90 transition-all flex items-center gap-2" x-transition x-cloak>
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                            <span class="text-sm font-semibold hidden sm:inline">Installer</span>
+                        </button>
+                        
+                        <!-- Logout Button -->
+                        <button @click="logout()" class="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500/20 transition-all">
+                            <i data-lucide="log-out" class="w-5 h-5"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Admin Quick Actions -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mandarine/20 relative overflow-hidden group">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                                <i data-lucide="plus-circle" class="w-5 h-5 text-brand-mandarine"></i> Gestion des Classes
-                            </h3>
-                        </div>
-                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Créez de nouvelles salles de cours pour les différentes filières.</p>
-                        <button @click="showRoomModal = true" class="w-full py-3 bg-brand-mandarine text-white text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                            <i data-lucide="plus" class="w-4 h-4"></i> Créer une nouvelle classe
-                        </button>
-                    </div>
-                    
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mint/20 relative overflow-hidden group">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                                <i data-lucide="mail" class="w-5 h-5 text-brand-mint"></i> Nouveau Message Flash
-                            </h3>
-                        </div>
-                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-4">Envoyez une notification urgente à tous les étudiants connectés.</p>
-                        <div class="flex gap-2">
-                            <input type="text" x-model="flashInfoText" placeholder="Votre message..." class="flex-1 bg-white/50 dark:bg-slate-900 border-none rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-mint dark:text-white">
-                            <button @click="publishFlashInfo()" class="px-4 py-2.5 bg-brand-mint text-brand-dark text-xs font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity">Envoyer</button>
+                <!-- Admin Quick Actions & Online Users -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column: Actions -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mandarine/20 relative overflow-hidden group">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                        <i data-lucide="plus-circle" class="w-5 h-5 text-brand-mandarine"></i> Gestion des Classes
+                                    </h3>
+                                </div>
+                                <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Créez de nouvelles salles de cours pour les différentes filières.</p>
+                                <button @click="showRoomModal = true" class="w-full py-3 bg-brand-mandarine text-white text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Créer une nouvelle classe
+                                </button>
+                            </div>
+                            
+                            <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-mint/20 relative overflow-hidden group">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                        <i data-lucide="mail" class="w-5 h-5 text-brand-mint"></i> Nouveau Message Flash
+                                    </h3>
+                                </div>
+                                <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-4">Envoyez une notification urgente à tous les étudiants connectés.</p>
+                                <div class="flex gap-2">
+                                    <input type="text" x-model="flashInfoText" placeholder="Votre message..." class="flex-1 bg-white/50 dark:bg-slate-900 border-none rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-mint dark:text-white">
+                                    <button @click="publishFlashInfo()" class="px-4 py-2.5 bg-brand-mint text-brand-dark text-xs font-bold rounded-xl shadow-md hover:opacity-90 transition-opacity">Envoyer</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-jaune/20 relative overflow-hidden group">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
+                                        <i data-lucide="shield-alert" class="w-5 h-5 text-brand-jaune"></i> Règles RGPD
+                                    </h3>
+                                </div>
+                                <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Modifiez les règles de confidentialité affichées aux étudiants.</p>
+                                <button @click="showRulesModal = true" class="w-full py-3 bg-brand-jaune/80 text-brand-dark text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i> Éditer les règles
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-brand-jaune/20 relative overflow-hidden group">
+                    <!-- Right Column: Online Users -->
+                    <div class="glass-darker p-6 rounded-2xl shadow-sm border border-green-500/20">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-brand-dark dark:text-white flex items-center gap-2">
-                                <i data-lucide="shield-alert" class="w-5 h-5 text-brand-jaune"></i> Règles RGPD
+                                <i data-lucide="users" class="w-5 h-5 text-green-500"></i> 
+                                Utilisateurs Connectés
                             </h3>
+                            <span class="bg-green-500/20 text-green-500 text-xs font-bold px-2 py-1 rounded-full" x-text="adminOnlineUsers.length || 0"></span>
                         </div>
-                        <p class="text-xs text-brand-dark/60 dark:text-white/50 mb-6">Modifiez les règles de confidentialité affichées aux étudiants.</p>
-                        <button @click="showRulesModal = true" class="w-full py-3 bg-brand-jaune/80 text-brand-dark text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                            <i data-lucide="edit-3" class="w-4 h-4"></i> Éditer les règles
-                        </button>
+                        
+                        <!-- Online Users List -->
+                        <div class="space-y-2 max-h-96 overflow-y-auto">
+                            <template x-for="user in adminOnlineUsers" :key="user.id">
+                                <div class="flex items-center gap-3 p-3 bg-white/10 dark:bg-black/10 rounded-xl hover:bg-white/20 dark:hover:bg-black/20 transition-colors">
+                                    <div class="relative flex-shrink-0">
+                                        <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm">
+                                            <img :src="getAvatar(user.name)" class="w-full h-full object-cover">
+                                        </div>
+                                        <div x-show="user.online" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse"></div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-brand-dark dark:text-white truncate" x-text="user.name"></p>
+                                        <p class="text-xs text-brand-dark/50 dark:text-white/50" x-text="user.class || 'Classe non définie'"></p>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <span x-show="user.role === 'ADMIN'" class="w-2 h-2 bg-brand-mandarine rounded-full"></span>
+                                        <span x-show="user.role === 'MODERATOR'" class="w-2 h-2 bg-brand-jaune rounded-full"></span>
+                                        <span x-show="user.role === 'STUDENT'" class="w-2 h-2 bg-gray-400 rounded-full"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <!-- Empty State -->
+                            <div x-show="adminOnlineUsers.length === 0" class="text-center py-8">
+                                <i data-lucide="users-off" class="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3"></i>
+                                <p class="text-sm text-gray-400 dark:text-gray-500">Aucun utilisateur connecté</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Online Stats -->
+                        <div class="mt-4 pt-4 border-t border-white/20 dark:border-white/5">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="text-center">
+                                    <p class="text-2xl font-bold text-green-500" x-text="adminOnlineUsers.length || 0"></p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500">En ligne</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-2xl font-bold text-brand-mandarine" x-text="adminUsers.length || 0"></p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500">Total</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1021,9 +1356,14 @@
         function campusApp() {
             return {
                 showSplash: true,
+                isLoading: true,
+                socketConnected: false,
+                minimumSplashTime: 1500, // 1.5 secondes minimum
+                splashStartTime: null,
                 currentView: 'chat', 
                 isSidebarOpen: false, 
-                isSidebarCollapsed: false, 
+                isSidebarCollapsed: false,
+                showDrawer: false, 
                 activeRoomId: null,
                 newMessage: '',
                 canInstall: false,
@@ -1095,6 +1435,14 @@
                     this.$watch('showNotifications', val => { if(val) this.$nextTick(() => lucide.createIcons()); });
                     // Rafraîchir les icônes quand la vue change
                     this.$watch('currentView', val => { this.$nextTick(() => lucide.createIcons()); });
+                    // Initialiser Prism.js après le chargement des messages
+                    this.$watch('messages', () => {
+                        this.$nextTick(() => {
+                            if (typeof Prism !== 'undefined') {
+                                Prism.highlightAll();
+                            }
+                        });
+                    });
                 },
                 
                 async initApp() {
@@ -1265,6 +1613,7 @@
                     this.socket.on('connect', () => {
                         console.log('Socket connecté !');
                         this.socketConnected = true;
+                        this.checkSplashDismissal();
                         if (this.activeRoomId) {
                             this.socket.emit('join_room', { roomId: this.activeRoomId });
                         }
@@ -1321,8 +1670,10 @@
                         // Afficher la bannière flash
                         this.flashInfoPreview = data.text;
                         this.flashInfoActive = true;
-                        setTimeout(() => { this.flashInfoActive = false; }, 8000);
-                        
+                        setTimeout(() => { this.flashInfoActive = false; }, 2000);
+
+                        this.checkSplashDismissal();
+
                         // Aussi injecter dans le panneau de notifications
                         this.notifications = [{
                             id: Date.now(),
